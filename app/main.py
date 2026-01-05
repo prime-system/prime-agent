@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import capture, chat, claude_sessions, config, files, git, monitoring, processing, push
 from app.config import settings
 from app.logging_config import configure_json_logging
+from app.middleware.request_id import RequestIDMiddleware
 from app.services.agent import AgentService
 from app.services.lock import init_vault_lock
 from app.services.agent_chat import AgentChatService
@@ -218,6 +219,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Add request ID middleware (must be after FastAPI creation, before CORS middleware)
+app.add_middleware(RequestIDMiddleware)
 
 # Configure CORS for SSE streaming from client apps
 if settings.cors_enabled:

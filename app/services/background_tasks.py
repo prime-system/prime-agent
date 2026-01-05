@@ -9,7 +9,10 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -102,18 +105,28 @@ async def safe_background_task(
     - All exceptions are logged with context
     - Task results are tracked for monitoring
     - Errors don't silently disappear
+    - Request ID context is propagated from the originating request
 
     Args:
         task_name: Name of the task for logging/tracking
         coro: Callable to execute (can be sync or async)
     """
+    from app.utils.request_context import get_request_id, set_request_id
+
     tracker = get_task_tracker()
+
+    # Capture request ID from current context (if any)
+    request_id = get_request_id()
 
     try:
         logger.debug(
             "Starting background task",
-            extra={"task_name": task_name},
+            extra={"task_name": task_name, "request_id": request_id},
         )
+
+        # Restore request ID in background task context
+        if request_id:
+            set_request_id(request_id)
 
         if asyncio.iscoroutinefunction(coro):
             await coro()
@@ -128,9 +141,8 @@ async def safe_background_task(
         await tracker.record_success(task_name)
 
     except Exception as e:
-        logger.error(
+        logger.exception(
             "Background task failed",
-            exc_info=True,
             extra={
                 "task_name": task_name,
                 "error": str(e),
