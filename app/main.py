@@ -20,6 +20,7 @@ from app.services.container import init_container
 from app.services.git import GitService
 from app.services.inbox import InboxService
 from app.services.logs import LogService
+from app.services import push_tokens
 from app.services.vault import VaultService
 from app.services.worker import AgentWorker
 
@@ -74,8 +75,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application startup and shutdown."""
     logger.info("Starting Prime server...")
 
-    # Initialize vault lock in the running event loop (MUST be first!)
+    # Initialize async locks in the running event loop (MUST be first!)
     await init_vault_lock()
+    await push_tokens.init_file_lock()
 
     # Initialize services
     vault_service = VaultService(settings.vault_path)

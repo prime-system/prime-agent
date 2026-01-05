@@ -1,17 +1,37 @@
 """Token management service for push notifications."""
 
+from __future__ import annotations
+
+import asyncio
 import json
 import logging
 import re
-import threading
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    pass
 
 logger = logging.getLogger(__name__)
 
-# Thread lock for file operations
-_file_lock = threading.Lock()
+# Async lock for file operations (initialized in event loop)
+_file_lock: asyncio.Lock | None = None
+
+
+def get_file_lock() -> asyncio.Lock:
+    """Get the file lock, raising if not initialized in event loop."""
+    if _file_lock is None:
+        msg = "File lock not initialized. Call init_file_lock() first."
+        raise RuntimeError(msg)
+    return _file_lock
+
+
+async def init_file_lock() -> asyncio.Lock:
+    """Initialize the file lock in the running event loop."""
+    global _file_lock
+    _file_lock = asyncio.Lock()
+    return _file_lock
 
 
 def validate_token_format(token: str) -> bool:
@@ -115,7 +135,7 @@ def save_tokens(tokens_file: Path, tokens: dict) -> None:
         raise
 
 
-def add_or_update_token(
+async def add_or_update_token(
     tokens_file: Path,
     token: str,
     device_type: Literal["iphone", "ipad", "mac"],
@@ -139,7 +159,7 @@ def add_or_update_token(
     sanitized_name = sanitize_device_name(device_name)
     now = datetime.now(UTC).isoformat()
 
-    with _file_lock:
+    async with get_file_lock():
         tokens = load_tokens(tokens_file)
 
         # Check if token already exists
@@ -184,7 +204,7 @@ def add_or_update_token(
         save_tokens(tokens_file, tokens)
 
 
-def remove_token(tokens_file: Path, token: str) -> bool:
+async def remove_token(tokens_file: Path, token: str) -> bool:
     """
     Remove token from storage.
 
@@ -195,7 +215,7 @@ def remove_token(tokens_file: Path, token: str) -> bool:
     Returns:
         True if token was found and removed, False otherwise
     """
-    with _file_lock:
+    async with get_file_lock():
         tokens = load_tokens(tokens_file)
 
         # Find and remove token

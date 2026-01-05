@@ -34,7 +34,7 @@ async def register_device(
     If token already exists, updates last_seen and device_name.
     """
     try:
-        push_tokens.add_or_update_token(
+        await push_tokens.add_or_update_token(
             tokens_file=settings.apn_devices_file,
             token=request.token,
             device_type=request.device_type,
@@ -71,7 +71,7 @@ async def unregister_device(
     Returns success=true even if token was not found (idempotent).
     """
     try:
-        removed = push_tokens.remove_token(
+        removed = await push_tokens.remove_token(
             tokens_file=settings.apn_devices_file,
             token=request.token,
         )
@@ -172,7 +172,7 @@ async def list_devices(
             environment = None
 
         # After validation, environment is either None or one of the allowed values
-        devices = apn_service.list_devices(
+        devices = await apn_service.list_devices(
             device_filter=device_filter,
             environment_filter=cast(Literal["development", "production"] | None, environment),
         )

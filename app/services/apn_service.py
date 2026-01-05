@@ -1,22 +1,24 @@
 """Apple Push Notification service."""
 
+from __future__ import annotations
+
 import logging
-import threading
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from aioapns import APNs, NotificationRequest
 
 from app.services.push_tokens import (
+    get_file_lock,
     load_tokens,
     remove_token,
     validate_token_format,
 )
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    pass
 
-# Thread lock for device file operations
-_file_lock = threading.Lock()
+logger = logging.getLogger(__name__)
 
 
 class APNService:
@@ -221,7 +223,7 @@ class APNService:
         Returns:
             dict with aggregated results and per-device status
         """
-        with _file_lock:
+        async with get_file_lock():
             tokens = load_tokens(self.devices_file)
 
         devices = tokens.get("devices", [])
@@ -337,7 +339,7 @@ class APNService:
             device_filter=device_filter,
         )
 
-    def list_devices(
+    async def list_devices(
         self,
         device_filter: str | None = None,
         environment_filter: Literal["development", "production"] | None = None,
@@ -352,7 +354,7 @@ class APNService:
         Returns:
             List of device dicts
         """
-        with _file_lock:
+        async with get_file_lock():
             tokens = load_tokens(self.devices_file)
 
         devices = tokens.get("devices", [])
@@ -383,8 +385,8 @@ class APNService:
 
         return filtered
 
-    def get_device_count(self) -> int:
+    async def get_device_count(self) -> int:
         """Get total count of registered devices."""
-        with _file_lock:
+        async with get_file_lock():
             tokens = load_tokens(self.devices_file)
         return len(tokens.get("devices", []))

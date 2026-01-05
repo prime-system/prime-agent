@@ -492,6 +492,132 @@ logger.exception("Exceptions with traceback")
 
 Asyncio warning suppressed for Claude SDK task context issue (app/main.py:30-39).
 
+### Concurrency Model: Pure Asyncio Only
+
+**Critical: NO mixing of threading primitives with async code.**
+
+This codebase uses pure `asyncio` for all concurrency. Threading primitives (`threading.Lock`, `threading.Thread`, etc.) are **strictly forbidden** in async contexts as they can cause deadlocks.
+
+**Why:** In asyncio, only one coroutine runs at a time (single-threaded event loop). A blocking `threading.Lock` holds the GIL while the event loop is blocked, preventing any other coroutine from running.
+
+**Rules:**
+
+1. **Use `asyncio.Lock` not `threading.Lock`:**
+   ```python
+   # ✅ CORRECT - Async lock
+   import asyncio
+   lock = asyncio.Lock()
+   async with lock:
+       await some_async_operation()
+
+   # ❌ WRONG - Blocks entire event loop
+   import threading
+   lock = threading.Lock()
+   with lock:  # This blocks!
+       pass
+   ```
+
+2. **Initialize `asyncio.Lock` in event loop:**
+   ```python
+   # Global lock reference
+   _lock: asyncio.Lock | None = None
+
+   async def init_lock() -> asyncio.Lock:
+       """Initialize in running event loop at startup."""
+       global _lock
+       _lock = asyncio.Lock()
+       return _lock
+
+   def get_lock() -> asyncio.Lock:
+       """Get initialized lock."""
+       if _lock is None:
+           raise RuntimeError("Lock not initialized")
+       return _lock
+   ```
+
+3. **Offload blocking I/O to executor:**
+   ```python
+   # ✅ CORRECT - File I/O in executor
+   loop = asyncio.get_event_loop()
+   result = await loop.run_in_executor(None, blocking_file_operation)
+
+   # ❌ WRONG - Blocks event loop
+   result = blocking_file_operation()
+   ```
+
+4. **Use `asyncio.TaskGroup` for concurrent tasks (Python 3.11+):**
+   ```python
+   # ✅ CORRECT - TaskGroup
+   async with asyncio.TaskGroup() as tg:
+       tg.create_task(task1())
+       tg.create_task(task2())
+       # Automatically waits and handles exceptions
+
+   # ⚠️ ACCEPTABLE - Manual gather (legacy)
+   tasks = [asyncio.create_task(task1()), asyncio.create_task(task2())]
+   await asyncio.gather(*tasks)
+   ```
+
+5. **Use `asyncio.Queue` not `queue.Queue`:**
+   ```python
+   # ✅ CORRECT
+   queue: asyncio.Queue = asyncio.Queue()
+   await queue.put(item)
+   item = await queue.get()
+
+   # ❌ WRONG - Not async-safe
+   from queue import Queue
+   queue = Queue()  # Blocking operations
+   ```
+
+**Initialization in `app/main.py:lifespan()`:**
+
+All async locks must be initialized in the running event loop during startup:
+```python
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # Initialize ALL async locks here
+    await init_vault_lock()
+    await push_tokens.init_file_lock()
+    # ... more services ...
+    yield
+    # Cleanup
+```
+
+**Examples in Codebase:**
+
+- ✅ `app/services/lock.py` - Global vault lock (asyncio.Lock)
+- ✅ `app/services/background_tasks.py` - Task tracker with asyncio.Lock
+- ✅ `app/services/agent_session_manager.py` - Session management with asyncio primitives
+- ✅ `app/services/push_tokens.py` - File operations with asyncio.Lock
+- ✅ `tests/test_concurrency_model.py` - Comprehensive concurrency tests
+
+**Common Mistake Prevention:**
+
+```python
+# ❌ NEVER DO THIS
+class MyService:
+    def __init__(self):
+        self.lock = threading.Lock()  # WRONG - blocks event loop!
+
+    async def process(self):
+        with self.lock:  # This locks out all other coroutines
+            await db.query()
+
+# ✅ DO THIS INSTEAD
+class MyService:
+    def __init__(self):
+        self.lock: asyncio.Lock | None = None
+
+    async def init_lock(self) -> None:
+        """Call from lifespan()"""
+        self.lock = asyncio.Lock()
+
+    async def process(self):
+        async with self.lock:
+            await db.query()
+```
+
 ### Security Best Practices: Credential Handling
 
 **Critical: Never log credentials in any form.** Exposed credentials in Docker logs, CI/CD pipelines, and log aggregation systems pose significant security risks (CWE-532, PCI-DSS violation).
