@@ -9,29 +9,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from app.dependencies import verify_token
+from app.dependencies import get_vault_service, verify_token
 from app.services.vault import VaultService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/files", dependencies=[Depends(verify_token)])
-
-# Service instance (injected at startup)
-_vault_service: VaultService | None = None
-
-
-def init_service(vault_service: VaultService) -> None:
-    """Initialize the vault service (called from main.py)."""
-    global _vault_service
-    _vault_service = vault_service
-
-
-def get_vault_service() -> VaultService:
-    """Dependency to get vault service."""
-    if _vault_service is None:
-        msg = "VaultService not initialized"
-        raise RuntimeError(msg)
-    return _vault_service
 
 
 class FileContentResponse(BaseModel):

@@ -16,6 +16,7 @@ from app.services.agent_session_manager import AgentSessionManager
 from app.services.apn_service import APNService
 from app.services.chat_session_manager import ChatSessionManager
 from app.services.claude_session_api import ClaudeSessionAPI
+from app.services.container import init_container
 from app.services.git import GitService
 from app.services.inbox import InboxService
 from app.services.logs import LogService
@@ -152,37 +153,29 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     else:
         logger.info("APNs disabled in configuration")
 
-    # Inject services into capture module
-    capture.init_services(vault_service, git_service, inbox_service)
-
-    # Inject services into processing module
-    processing.init_services(vault_service, inbox_service, log_service)
-
-    # Inject services into config module
-    config.init_services(vault_service, settings)
-
-    # Inject services into push module
-    push.init_services(apn_service)
-
     # Initialize AgentSessionManager
     agent_session_manager = AgentSessionManager(agent_service=agent_chat_service)
     agent_session_manager.start_cleanup_loop()
-
-    # Inject services into chat module
-    chat.init_services(chat_session_manager, agent_chat_service, agent_session_manager)
-
-    # Inject services into files module
-    files.init_service(vault_service)
-
-    # Inject services into git module
-    git.init_service(git_service)
 
     # Initialize Claude session API
     claude_session_api = ClaudeSessionAPI(
         project_path=settings.vault_path,
         claude_home="/home/prime/.claude",
     )
-    claude_sessions.init_service(claude_session_api)
+
+    # Initialize service container (replaces per-module init_services calls)
+    init_container(
+        vault_service=vault_service,
+        git_service=git_service,
+        inbox_service=inbox_service,
+        agent_service=agent_service,
+        log_service=log_service,
+        chat_session_manager=chat_session_manager,
+        agent_chat_service=agent_chat_service,
+        agent_session_manager=agent_session_manager,
+        apn_service=apn_service,
+        claude_session_api=claude_session_api,
+    )
 
     # Initialize agent worker
     AgentWorker.initialize(agent_service, git_service, log_service)

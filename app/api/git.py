@@ -1,36 +1,16 @@
 """Git operations API endpoints."""
 
 import logging
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.dependencies import verify_token
+from app.dependencies import get_git_service, verify_token
 from app.services.git import GitError, GitService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/git", dependencies=[Depends(verify_token)])
-
-# Global service (injected at startup)
-_git_service: GitService | None = None
-
-
-def init_service(git_service: GitService) -> None:
-    """Initialize git service for this module."""
-    global _git_service
-    _git_service = git_service
-
-
-def get_git_service() -> GitService:
-    """Get git service dependency."""
-    if _git_service is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Git service not initialized",
-        )
-    return _git_service
 
 
 class GitStatusResponse(BaseModel):

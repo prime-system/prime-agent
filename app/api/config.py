@@ -5,37 +5,14 @@ import logging
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from app.config import Settings, get_config_manager
-from app.dependencies import verify_token
+from app.config import Settings, get_config_manager, settings
+from app.dependencies import get_vault_service, verify_token
 from app.services.vault import VaultService
 from app.version import get_version
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["config"])
-
-# Global services (injected at startup)
-_vault_service: VaultService | None = None
-_settings: Settings | None = None
-
-
-def init_services(vault_service: VaultService, settings: Settings) -> None:
-    """Initialize services for this module."""
-    global _vault_service, _settings
-    _vault_service = vault_service
-    _settings = settings
-
-
-def get_services() -> tuple[VaultService, Settings]:
-    """Get services dependency."""
-    if _vault_service is None or _settings is None:
-        from fastapi import HTTPException, status
-
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Services not initialized",
-        )
-    return _vault_service, _settings
 
 
 class FeaturesResponse(BaseModel):
@@ -61,14 +38,15 @@ class ConfigResponse(BaseModel):
 
 
 @router.get("/config", response_model=ConfigResponse)
-async def get_config() -> ConfigResponse:
+async def get_config(
+    vault_service: VaultService = Depends(get_vault_service),
+) -> ConfigResponse:
     """
     Get server configuration and feature flags.
 
     Returns information about enabled features so clients can
     adapt their UI dynamically.
     """
-    vault_service, settings = get_services()
     vault_path = vault_service.vault_path
 
     # Check if user has created a custom processCapture.md in vault
@@ -99,6 +77,7 @@ class ReloadResponse(BaseModel):
 
 @router.post("/config/reload", response_model=ReloadResponse)
 async def reload_config(
+    vault_service: VaultService = Depends(get_vault_service),
     _: None = Depends(verify_token),
 ) -> ReloadResponse:
     """
@@ -111,8 +90,6 @@ async def reload_config(
         Status and message about the reload operation
     """
     try:
-        vault_service, _ = get_services()
-
         # Reload application config
         config_manager = get_config_manager()
         config_manager.reload()

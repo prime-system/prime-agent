@@ -1,0 +1,114 @@
+"""
+Service dependency container.
+
+Centralizes service creation and access without global state mutation.
+Replaces the anti-pattern of module-level globals found in API modules.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.services.agent import AgentService
+    from app.services.agent_chat import AgentChatService
+    from app.services.agent_session_manager import AgentSessionManager
+    from app.services.apn_service import APNService
+    from app.services.chat_session_manager import ChatSessionManager
+    from app.services.claude_session_api import ClaudeSessionAPI
+    from app.services.git import GitService
+    from app.services.inbox import InboxService
+    from app.services.logs import LogService
+    from app.services.vault import VaultService
+
+
+class ServiceContainer:
+    """Container for all application services.
+
+    Provides centralized access to services without global state mutation.
+    Services are injected via FastAPI's Depends() mechanism.
+    """
+
+    def __init__(
+        self,
+        vault_service: VaultService,
+        git_service: GitService,
+        inbox_service: InboxService,
+        agent_service: AgentService,
+        log_service: LogService,
+        chat_session_manager: ChatSessionManager,
+        agent_chat_service: AgentChatService,
+        agent_session_manager: AgentSessionManager,
+        apn_service: APNService | None,
+        claude_session_api: ClaudeSessionAPI,
+    ) -> None:
+        """Initialize service container with all required services."""
+        self.vault_service = vault_service
+        self.git_service = git_service
+        self.inbox_service = inbox_service
+        self.agent_service = agent_service
+        self.log_service = log_service
+        self.chat_session_manager = chat_session_manager
+        self.agent_chat_service = agent_chat_service
+        self.agent_session_manager = agent_session_manager
+        self.apn_service = apn_service
+        self.claude_session_api = claude_session_api
+
+
+_container: ServiceContainer | None = None
+
+
+def init_container(
+    vault_service: VaultService,
+    git_service: GitService,
+    inbox_service: InboxService,
+    agent_service: AgentService,
+    log_service: LogService,
+    chat_session_manager: ChatSessionManager,
+    agent_chat_service: AgentChatService,
+    agent_session_manager: AgentSessionManager,
+    apn_service: APNService | None,
+    claude_session_api: ClaudeSessionAPI,
+) -> None:
+    """Initialize service container (called once in FastAPI lifespan).
+
+    Args:
+        vault_service: VaultService instance for vault operations
+        git_service: GitService instance for git operations
+        inbox_service: InboxService instance for capture formatting
+        agent_service: AgentService instance for agent operations
+        log_service: LogService instance for audit logging
+        chat_session_manager: ChatSessionManager for managing chat sessions
+        agent_chat_service: AgentChatService for agent chat operations
+        agent_session_manager: AgentSessionManager for managing agent sessions
+        apn_service: APNService instance or None if APNs disabled
+        claude_session_api: ClaudeSessionAPI for Claude session access
+    """
+    global _container
+    _container = ServiceContainer(
+        vault_service=vault_service,
+        git_service=git_service,
+        inbox_service=inbox_service,
+        agent_service=agent_service,
+        log_service=log_service,
+        chat_session_manager=chat_session_manager,
+        agent_chat_service=agent_chat_service,
+        agent_session_manager=agent_session_manager,
+        apn_service=apn_service,
+        claude_session_api=claude_session_api,
+    )
+
+
+def get_container() -> ServiceContainer:
+    """Get service container (use via FastAPI Depends).
+
+    Returns:
+        ServiceContainer with all initialized services
+
+    Raises:
+        RuntimeError: If container not initialized (lifespan not running)
+    """
+    if _container is None:
+        msg = "Service container not initialized - application lifespan may not be running"
+        raise RuntimeError(msg)
+    return _container

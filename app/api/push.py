@@ -1,12 +1,12 @@
 """Push notifications API endpoints."""
 
 import logging
-from typing import TYPE_CHECKING, Literal, cast
+from typing import Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.config import settings
-from app.dependencies import verify_token
+from app.dependencies import get_apn_service, verify_token
 from app.models.push import (
     DeviceListResponse,
     NotificationSendRequest,
@@ -20,14 +20,6 @@ from app.services.apn_service import APNService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-apn_service: APNService | None = None
-
-
-def init_services(apn: APNService | None = None) -> None:
-    """Initialize module-level services."""
-    global apn_service
-    apn_service = apn
 
 
 @router.post("/push/register", response_model=PushResponse)
@@ -100,6 +92,7 @@ async def unregister_device(
 @router.post("/notifications/send", response_model=NotificationSendResponse)
 async def send_notification(
     request: NotificationSendRequest,
+    apn_service: APNService | None = Depends(get_apn_service),
     _: None = Depends(verify_token),
 ) -> NotificationSendResponse:
     """
@@ -156,6 +149,7 @@ async def send_notification(
 async def list_devices(
     device_filter: str | None = None,
     environment: str | None = None,
+    apn_service: APNService | None = Depends(get_apn_service),
     _: None = Depends(verify_token),
 ) -> DeviceListResponse:
     """

@@ -104,15 +104,41 @@ def test_app():
 @pytest.fixture
 def client(temp_vault, mock_git_service, test_app):
     """Test client with mocked services."""
-    from app.api import capture
     from app.services.inbox import InboxService
     from app.services.vault import VaultService
+    from app.services.container import init_container
+    from app.services.chat_session_manager import ChatSessionManager
+    from app.services.agent_chat import AgentChatService
+    from app.services.agent_session_manager import AgentSessionManager
+    from app.services.logs import LogService
+    from app.services.claude_session_api import ClaudeSessionAPI
+    from app.config import settings
 
     vault_service = VaultService(str(temp_vault))
     vault_service.ensure_structure()
     inbox_service = InboxService()
+    log_service = LogService(logs_dir=vault_service.logs_path(), vault_path=vault_service.vault_path)
+    chat_session_manager = ChatSessionManager(
+        vault_path=str(temp_vault),
+        claude_home="/tmp/test-claude",
+    )
+    agent_chat_service = MagicMock(spec=AgentChatService)
+    agent_session_manager = MagicMock(spec=AgentSessionManager)
+    claude_session_api = MagicMock(spec=ClaudeSessionAPI)
 
-    capture.init_services(vault_service, mock_git_service, inbox_service)
+    # Initialize container with mocked services
+    init_container(
+        vault_service=vault_service,
+        git_service=mock_git_service,
+        inbox_service=inbox_service,
+        agent_service=MagicMock(),
+        log_service=log_service,
+        chat_session_manager=chat_session_manager,
+        agent_chat_service=agent_chat_service,
+        agent_session_manager=agent_session_manager,
+        apn_service=None,
+        claude_session_api=claude_session_api,
+    )
 
     with TestClient(test_app) as c:
         yield c

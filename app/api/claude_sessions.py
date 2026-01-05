@@ -3,16 +3,14 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel
 
+from app.dependencies import get_claude_session_api
 from app.services.claude_session_api import ClaudeSessionAPI
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/claude-sessions", tags=["claude-sessions"])
-
-# Module-level service (initialized at startup)
-claude_session_api: ClaudeSessionAPI
 
 
 class SessionListResponse(BaseModel):
@@ -42,12 +40,6 @@ class MessageListResponse(BaseModel):
     message_count: int
 
 
-def init_service(api: ClaudeSessionAPI) -> None:
-    """Initialize module-level service."""
-    global claude_session_api
-    claude_session_api = api
-
-
 @router.get("/", response_model=SessionListResponse)
 async def list_sessions(
     include_agent_sessions: bool = Query(
@@ -56,6 +48,7 @@ async def list_sessions(
     ),
     limit: int = Query(50, ge=1, le=500, description="Maximum number of sessions"),
     query: str | None = Query(None, description="Search query for session summaries"),
+    claude_session_api: ClaudeSessionAPI = Depends(get_claude_session_api),
 ) -> SessionListResponse:
     """
     List available Claude Code sessions.
@@ -94,6 +87,7 @@ async def list_sessions(
 @router.get("/{session_id}", response_model=SessionDetailResponse)
 async def get_session(
     session_id: str = Path(..., description="Session UUID or agent ID"),
+    claude_session_api: ClaudeSessionAPI = Depends(get_claude_session_api),
 ) -> SessionDetailResponse:
     """
     Get complete session data including all messages.
@@ -127,6 +121,7 @@ async def get_session_messages(
         None,
         description="Filter messages by role (user, assistant)",
     ),
+    claude_session_api: ClaudeSessionAPI = Depends(get_claude_session_api),
 ) -> MessageListResponse:
     """
     Get messages from a session, optionally filtered by role.
@@ -165,6 +160,7 @@ async def get_session_messages(
 @router.get("/{session_id}/summary")
 async def get_session_summary(
     session_id: str = Path(..., description="Session UUID or agent ID"),
+    claude_session_api: ClaudeSessionAPI = Depends(get_claude_session_api),
 ) -> dict[str, Any]:
     """
     Get session metadata without loading all messages.

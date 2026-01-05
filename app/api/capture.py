@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 
-from app.dependencies import verify_token
+from app.dependencies import get_git_service, get_inbox_service, get_vault_service, verify_token
 from app.models.capture import CaptureRequest, CaptureResponse
 from app.services.background_tasks import safe_background_task
 from app.services.git import GitService
@@ -13,29 +13,14 @@ from app.services.vault import VaultService
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-vault_service: VaultService
-git_service: GitService
-inbox_service: InboxService
-title_generator: TitleGenerator | None = None
-
-
-def init_services(vault: VaultService, git: GitService, inbox: InboxService) -> None:
-    """Initialize module-level services."""
-    global vault_service, git_service, inbox_service, title_generator
-    vault_service = vault
-    git_service = git
-    inbox_service = inbox
-
-    # Initialize title generator if needed
-    if vault_service.needs_title_generation():
-        title_generator = TitleGenerator()
-        logger.info("Title generation enabled (pattern contains {title})")
-
 
 @router.post("/capture", response_model=CaptureResponse)
 async def capture(
     request: CaptureRequest,
     background_tasks: BackgroundTasks,
+    vault_service: VaultService = Depends(get_vault_service),
+    git_service: GitService = Depends(get_git_service),
+    inbox_service: InboxService = Depends(get_inbox_service),
     _: None = Depends(verify_token),
 ) -> CaptureResponse:
     """
@@ -58,8 +43,9 @@ async def capture(
 
     # Generate title if the file pattern requires it
     title = None
-    if title_generator:
+    if vault_service.needs_title_generation():
         try:
+            title_generator = TitleGenerator()
             title = await title_generator.generate_title(request.text)
             logger.info(f"Generated title for {dump_id}: {title}")
         except Exception as e:

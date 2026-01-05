@@ -12,7 +12,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 
-from app.dependencies import verify_token
+from app.dependencies import get_inbox_service, get_log_service, get_vault_service, verify_token
 from app.services.inbox import InboxService
 from app.services.logs import LogService
 from app.services.vault import VaultService
@@ -20,22 +20,6 @@ from app.services.worker import AgentWorker
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/processing", tags=["processing"])
-
-vault_service: VaultService
-inbox_service: InboxService
-log_service: LogService
-
-
-def init_services(
-    vault: VaultService,
-    inbox: InboxService,
-    logs: LogService,
-) -> None:
-    """Initialize module-level services."""
-    global vault_service, inbox_service, log_service
-    vault_service = vault
-    inbox_service = inbox
-    log_service = logs
 
 
 @router.post("/trigger")
@@ -69,6 +53,9 @@ async def trigger_processing(
 
 @router.get("/status")
 async def get_status(
+    vault_service: VaultService = Depends(get_vault_service),
+    inbox_service: InboxService = Depends(get_inbox_service),
+    log_service: LogService = Depends(get_log_service),
     _: None = Depends(verify_token),
 ) -> dict[str, Any]:
     """
@@ -95,6 +82,8 @@ async def get_status(
 
 @router.get("/queue")
 async def get_queue(
+    vault_service: VaultService = Depends(get_vault_service),
+    inbox_service: InboxService = Depends(get_inbox_service),
     _: None = Depends(verify_token),
 ) -> dict[str, Any]:
     """

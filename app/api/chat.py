@@ -2,13 +2,17 @@
 
 import asyncio
 import logging
-from collections.abc import AsyncGenerator
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Path, Query, WebSocket, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, WebSocket, status
 from fastapi.websockets import WebSocketDisconnect
 
+from app.dependencies import (
+    get_agent_chat_service,
+    get_agent_session_manager,
+    get_chat_session_manager,
+)
 from app.models.chat import (
     ChatHistoryResponse,
     ChatMessage,
@@ -21,11 +25,6 @@ from app.services.chat_session_manager import ChatSessionManager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["chat"])
-
-# Module-level services (initialized at startup)
-session_manager: ChatSessionManager
-agent_service: AgentChatService
-agent_session_manager: Any  # AgentSessionManager (imported at runtime to avoid circular dependency)
 
 
 class ConnectionManager:
@@ -102,22 +101,9 @@ class ConnectionManager:
 connection_manager = ConnectionManager()
 
 
-def init_services(
-    session_mgr: ChatSessionManager,
-    agent_chat_svc: AgentChatService,
-    agent_sess_mgr: Any,
-) -> None:
-    """Initialize module-level services."""
-    global session_manager, agent_service, agent_session_manager
-    session_manager = session_mgr
-    agent_service = agent_chat_svc
-    agent_session_manager = agent_sess_mgr
-
-
 @router.post("/sessions", response_model=ChatSessionResponse)
 async def create_session(
     user_id: str | None = Query(None),
-    _: None = None,
 ) -> ChatSessionResponse:
     """
     Create a new chat session placeholder.
@@ -148,6 +134,7 @@ async def create_session(
 )
 async def get_session_messages(
     session_id: str = Path(..., description="Claude session ID to retrieve messages from"),
+    session_manager: ChatSessionManager = Depends(get_chat_session_manager),
 ) -> ChatHistoryResponse:
     """
     Retrieve message history for a Claude Code session.
@@ -201,7 +188,12 @@ async def get_session_messages(
 
 
 @router.websocket("/ws/{session_id}")
-async def websocket_endpoint(websocket: WebSocket, session_id: str):
+async def websocket_endpoint(
+    websocket: WebSocket,
+    session_id: str,
+    session_manager: ChatSessionManager = Depends(get_chat_session_manager),
+    agent_session_manager: Any = Depends(get_agent_session_manager),
+):
     """
     WebSocket endpoint for bidirectional chat communication.
 
@@ -228,6 +220,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     Args:
         websocket: WebSocket connection
         session_id: Session identifier (Claude UUID, "new", or connection ID)
+        session_manager: ChatSessionManager for managing sessions
+        agent_session_manager: AgentSessionManager for managing agent sessions
     """
     # Determine if this is a resume or new session
     claude_session_id = None
