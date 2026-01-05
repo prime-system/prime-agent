@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from app.services.chat_session_manager import ChatSessionManager
     from app.services.claude_session_api import ClaudeSessionAPI
     from app.services.git import GitService
+    from app.services.health import HealthCheckService
     from app.services.inbox import InboxService
     from app.services.logs import LogService
     from app.services.vault import VaultService
@@ -41,6 +42,7 @@ class ServiceContainer:
         agent_session_manager: AgentSessionManager,
         apn_service: APNService | None,
         claude_session_api: ClaudeSessionAPI,
+        health_service: HealthCheckService,
     ) -> None:
         """Initialize service container with all required services."""
         self.vault_service = vault_service
@@ -53,6 +55,7 @@ class ServiceContainer:
         self.agent_session_manager = agent_session_manager
         self.apn_service = apn_service
         self.claude_session_api = claude_session_api
+        self.health_service = health_service
 
 
 _container: ServiceContainer | None = None
@@ -69,6 +72,7 @@ def init_container(
     agent_session_manager: AgentSessionManager,
     apn_service: APNService | None,
     claude_session_api: ClaudeSessionAPI,
+    health_service: HealthCheckService,
 ) -> None:
     """Initialize service container (called once in FastAPI lifespan).
 
@@ -83,6 +87,7 @@ def init_container(
         agent_session_manager: AgentSessionManager for managing agent sessions
         apn_service: APNService instance or None if APNs disabled
         claude_session_api: ClaudeSessionAPI for Claude session access
+        health_service: HealthCheckService for health checks
     """
     global _container
     _container = ServiceContainer(
@@ -96,6 +101,7 @@ def init_container(
         agent_session_manager=agent_session_manager,
         apn_service=apn_service,
         claude_session_api=claude_session_api,
+        health_service=health_service,
     )
 
 

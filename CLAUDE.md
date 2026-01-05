@@ -939,6 +939,118 @@ git_service.commit_and_push("Your message", changed_files)
 
 Git operations raise `GitError` on failures. Wrap in try-except and log appropriately.
 
+### Health Check Endpoints
+
+The application provides three health check endpoints for monitoring system status:
+
+**1. `GET /health` - Simple liveness check (no authentication required)**
+- Returns 200 if service is running
+- Use for Kubernetes liveness probes
+- Minimal response: `{"status": "ok"}`
+
+```bash
+curl http://localhost:8000/health
+```
+
+**2. `GET /health/ready` - Readiness check with service verification**
+- Checks vault, git, and APNs availability
+- Returns 200 if healthy/degraded, 503 if unhealthy
+- Use for Kubernetes readiness probes
+- No authentication required
+
+```bash
+curl http://localhost:8000/health/ready
+```
+
+**3. `GET /health/detailed` - Detailed health status (requires authentication)**
+- Returns complete status of all services with detailed information
+- Requires valid bearer token
+- Use for monitoring dashboards
+
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  http://localhost:8000/health/detailed
+```
+
+**Health Status Values:**
+- `healthy` - All services operational
+- `degraded` - Some non-critical services down (e.g., git connectivity issues)
+- `unhealthy` - Critical services down (e.g., vault inaccessible)
+
+**Service Health Response Example:**
+```json
+{
+  "status": "healthy",
+  "timestamp": "2026-01-05T14:30:45.123456",
+  "version": "1.0.0",
+  "services": [
+    {
+      "name": "vault",
+      "status": "healthy",
+      "message": "Vault accessible and writable",
+      "response_time_ms": 1.23,
+      "details": {"path": "/vault"}
+    },
+    {
+      "name": "git",
+      "status": "healthy",
+      "message": "Git repository accessible",
+      "response_time_ms": 2.45,
+      "details": {"changed_files": 0}
+    },
+    {
+      "name": "apns",
+      "status": "healthy",
+      "message": "APNs service configured",
+      "response_time_ms": null,
+      "details": {"bundle_id": "com.example.app", "environment": "production"}
+    }
+  ]
+}
+```
+
+**Kubernetes Probe Configuration:**
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prime-agent
+spec:
+  template:
+    spec:
+      containers:
+      - name: prime-agent
+        image: prime-agent:latest
+        ports:
+        - containerPort: 8000
+
+        # Liveness probe - is service alive?
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        # Readiness probe - is service ready for traffic?
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+```
+
+**Implementation:**
+- Service: `app/services/health.py` - HealthCheckService
+- Models: `app/models/health.py` - HealthCheckResponse, ServiceHealth
+- Endpoints: `app/api/health.py` - Health check routes
+- Tests: `tests/test_health_checks.py` - Comprehensive test coverage
+
 ### Docker Development Workflow
 
 **Starting Development:**
@@ -1037,9 +1149,12 @@ docker compose restart primeai
 - `app/services/worker.py` - Background processing orchestration
 - `app/services/vault.py` - Vault path management and structure
 - `app/services/git.py` - Git operations wrapper
+- `app/services/health.py` - Health check service
 - `app/api/capture.py` - Capture endpoint (write to inbox)
 - `app/api/processing.py` - Processing trigger endpoint
+- `app/api/health.py` - Health check endpoints
 - `app/models/vault_config.py` - Vault configuration schema
+- `app/models/health.py` - Health check models
 
 **Configuration & Infrastructure:**
 - `config.default.yaml` - Default server configuration template

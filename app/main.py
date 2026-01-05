@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import capture, chat, claude_sessions, config, files, git, monitoring, processing, push
+from app.api import capture, chat, claude_sessions, config, files, git, health, monitoring, processing, push
 from app.config import settings
 from app.logging_config import configure_json_logging
 from app.middleware.request_id import RequestIDMiddleware
@@ -20,11 +20,13 @@ from app.services.chat_session_manager import ChatSessionManager
 from app.services.claude_session_api import ClaudeSessionAPI
 from app.services.container import init_container
 from app.services.git import GitService
+from app.services.health import HealthCheckService
 from app.services.inbox import InboxService
 from app.services.logs import LogService
 from app.services import push_tokens
 from app.services.vault import VaultService
 from app.services.worker import AgentWorker
+from app.version import get_version
 
 # Configure structured JSON logging
 configure_json_logging(log_level=settings.log_level)
@@ -168,6 +170,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         claude_home="/home/prime/.claude",
     )
 
+    # Initialize health check service
+    health_service = HealthCheckService(
+        vault_service=vault_service,
+        git_service=git_service,
+        apn_service=apn_service,
+        version=get_version(),
+    )
+
     # Initialize service container (replaces per-module init_services calls)
     init_container(
         vault_service=vault_service,
@@ -180,6 +190,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         agent_session_manager=agent_session_manager,
         apn_service=apn_service,
         claude_session_api=claude_session_api,
+        health_service=health_service,
     )
 
     # Initialize agent worker
@@ -251,12 +262,7 @@ app.include_router(claude_sessions.router)
 app.include_router(config.router)
 app.include_router(files.router, tags=["files"])
 app.include_router(git.router, tags=["git"])
+app.include_router(health.router)
 app.include_router(monitoring.router, tags=["monitoring"])
 app.include_router(processing.router)
 app.include_router(push.router, prefix="/api/v1", tags=["push"])
-
-
-@app.get("/health")
-async def health() -> dict[str, Any]:
-    """Health check endpoint."""
-    return {"status": "ok", "git_enabled": settings.git_enabled}

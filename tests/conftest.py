@@ -89,14 +89,11 @@ def mock_git_service():
 @pytest.fixture
 def test_app():
     """Create a test FastAPI app without the lifespan that initializes git."""
-    from app.api import capture
+    from app.api import capture, health
 
     app = FastAPI(title="Prime Server Test")
     app.include_router(capture.router, tags=["capture"])
-
-    @app.get("/health")
-    async def health():
-        return {"status": "ok"}
+    app.include_router(health.router)
 
     return app
 
@@ -112,6 +109,7 @@ def client(temp_vault, mock_git_service, test_app):
     from app.services.agent_session_manager import AgentSessionManager
     from app.services.logs import LogService
     from app.services.claude_session_api import ClaudeSessionAPI
+    from app.services.health import HealthCheckService
     from app.config import settings
 
     vault_service = VaultService(str(temp_vault))
@@ -125,6 +123,12 @@ def client(temp_vault, mock_git_service, test_app):
     agent_chat_service = MagicMock(spec=AgentChatService)
     agent_session_manager = MagicMock(spec=AgentSessionManager)
     claude_session_api = MagicMock(spec=ClaudeSessionAPI)
+    health_service = HealthCheckService(
+        vault_service=vault_service,
+        git_service=mock_git_service,
+        apn_service=None,
+        version="test-version",
+    )
 
     # Initialize container with mocked services
     init_container(
@@ -138,6 +142,7 @@ def client(temp_vault, mock_git_service, test_app):
         agent_session_manager=agent_session_manager,
         apn_service=None,
         claude_session_api=claude_session_api,
+        health_service=health_service,
     )
 
     with TestClient(test_app) as c:

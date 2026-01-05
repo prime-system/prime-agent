@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from app.services.chat_session_manager import ChatSessionManager
     from app.services.claude_session_api import ClaudeSessionAPI
     from app.services.git import GitService
+    from app.services.health import HealthCheckService
     from app.services.inbox import InboxService
     from app.services.logs import LogService
     from app.services.vault import VaultService
@@ -97,3 +98,9 @@ async def get_claude_session_api() -> ClaudeSessionAPI:
     """Get Claude session API via dependency injection."""
     container = get_container()
     return container.claude_session_api
+
+
+async def get_health_service() -> HealthCheckService:
+    """Get health check service via dependency injection."""
+    container = get_container()
+    return container.health_service
