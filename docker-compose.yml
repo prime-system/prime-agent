@@ -1,0 +1,44 @@
+version: "3.8"
+
+services:
+  primeai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: primeai
+    ports:
+      - "8000:8000"
+    volumes:
+      - vault:/vault
+      - primeai-claude:/home/prime/.claude
+      - primeai-data:/data
+      - ./config.yaml:/app/config.yaml:ro
+    environment:
+      # Configuration file location (required)
+      - CONFIG_PATH=/app/config.yaml
+      # Secrets (referenced in config.yaml as ${VAR_NAME})
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
+      - AUTH_TOKEN=${AUTH_TOKEN}
+      # Git secrets (optional, only needed if git.enabled=true in config.yaml)
+      - GIT_SSH_KEY=${GIT_SSH_KEY:-}
+      - GIT_USERNAME=${GIT_USERNAME:-}
+      - GIT_TOKEN=${GIT_TOKEN:-}
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  vault:
+  primeai-claude:
+  primeai-data:

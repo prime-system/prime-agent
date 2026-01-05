@@ -1,0 +1,106 @@
+# PrimeAgent Configuration
+#
+# This is the default configuration template for PrimeAgent.
+# Environment variables are referenced with ${VAR_NAME} syntax and are expanded at startup.
+#
+# Required environment variables (must be set before startup):
+# - ANTHROPIC_API_KEY: Your Claude API key
+# - AUTH_TOKEN: API authentication token
+#
+# Optional environment variables:
+# - GIT_SSH_KEY: SSH private key for Git SSH authentication
+# - GIT_USERNAME: Username for HTTPS Git authentication
+# - GIT_TOKEN: Token/password for HTTPS Git authentication
+
+vault:
+  # Path to the knowledge base vault
+  path: /vault
+
+workspace:
+  # Path to the workspace directory for additional repositories
+  path: /workspace
+
+  # Enable workspace/vault switching support
+  enabled: false
+
+git:
+  # Enable Git synchronization of vault changes
+  enabled: false
+
+  # Git repository URL (required if enabled=true)
+  # Examples:
+  #   - git@github.com:username/Prime-Vault.git  (SSH)
+  #   - https://github.com/username/Prime-Vault.git  (HTTPS)
+  repo_url: null
+
+  # Git commit author configuration
+  user_name: "Prime Agent"
+  user_email: "prime@local"
+
+  # Git authentication method
+  auth:
+    # Method: 'ssh' or 'https'
+    # - SSH: Requires GIT_SSH_KEY environment variable with private key
+    # - HTTPS: Requires GIT_USERNAME and GIT_TOKEN environment variables
+    method: ssh
+
+anthropic:
+  # Claude API key (required)
+  # Provide via ANTHROPIC_API_KEY environment variable
+  api_key: ${ANTHROPIC_API_KEY}
+
+  # Optional: Custom Anthropic API endpoint
+  # Leave null to use default endpoint
+  base_url: null
+
+  # Claude model for agent processing
+  model: "claude-3-5-haiku-latest"
+
+  # Maximum budget in USD for a single processing run
+  # Used as a safety limit to prevent runaway costs
+  max_budget_usd: 2.0
+
+auth:
+  # API authentication token (required)
+  # Provide via AUTH_TOKEN environment variable
+  token: ${AUTH_TOKEN}
+
+logging:
+  # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+
+apn:
+  # Apple Push Notifications (APNs) configuration
+  # Only required if you need to send push notifications to iOS/macOS app
+
+  # Enable/disable APNs capability
+  enabled: false
+
+  # Apple Developer Account Team ID (10-character alphanumeric)
+  # Find in Apple Developer account > Settings > Team ID
+  # Provide via APPLE_TEAM_ID environment variable
+  team_id: ${APPLE_TEAM_ID}
+
+  # Bundle ID for PrimeApp (from Xcode project)
+  # Example: com.example.primeapp
+  # Provide via APPLE_BUNDLE_ID environment variable
+  bundle_id: ${APPLE_BUNDLE_ID}
+
+  # Key ID from Apple Developer account
+  # From Apple Developer > Keys > App Development (10-character alphanumeric)
+  # Provide via APPLE_KEY_ID environment variable
+  key_id: ${APPLE_KEY_ID}
+
+  # Full p8 key content from Apple Developer
+  # Download .p8 file and provide entire contents (including BEGIN/END lines)
+  # Provide via APPLE_P8_KEY environment variable
+  p8_key: ${APPLE_P8_KEY}
+
+storage:
+  # Data directory for persistent storage (not vault-managed)
+  # Used for device tokens and other persistent data
+  # Defaults to /data if not specified
+  data_path: /data
+
+# Note: All ${VAR_NAME} references are expanded from environment variables at startup.
+# If any required variable is missing, the app will fail with a clear error message.
