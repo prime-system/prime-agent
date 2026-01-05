@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import capture, chat, claude_sessions, config, files, git, monitoring, processing, push
 from app.config import settings
+from app.logging_config import configure_json_logging
 from app.services.agent import AgentService
 from app.services.lock import init_vault_lock
 from app.services.agent_chat import AgentChatService
@@ -24,10 +25,8 @@ from app.services import push_tokens
 from app.services.vault import VaultService
 from app.services.worker import AgentWorker
 
-logging.basicConfig(
-    level=getattr(logging, settings.log_level.upper()),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+# Configure structured JSON logging
+configure_json_logging(log_level=settings.log_level)
 logger = logging.getLogger(__name__)
 
 # Suppress known asyncio warning from Claude SDK task context issue

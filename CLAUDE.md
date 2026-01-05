@@ -479,18 +479,70 @@ Ignored rules (see pyproject.toml:83-101):
 
 ### Logging Conventions
 
+All application logging uses **structured JSON format** for better observability.
+
+**Pattern:**
+
 ```python
+import logging
+
 logger = logging.getLogger(__name__)  # Module-level logger
 
-# Log levels:
-logger.debug("Detailed internal state")
-logger.info("Normal operation milestones")
-logger.warning("Recoverable issues")
-logger.error("Operation failures")
-logger.exception("Exceptions with traceback")
+# ✓ GOOD - Structured fields in extra dict (parsed by log aggregators)
+logger.info("Capture received", extra={
+    "dump_id": dump_id,
+    "source": request.source.value,
+})
+
+# ❌ BAD - String formatting (not parsed by log aggregators)
+logger.info(f"Capture received: {dump_id}")
 ```
 
-Asyncio warning suppressed for Claude SDK task context issue (app/main.py:30-39).
+**Log Levels:**
+
+- `logger.debug()` - Detailed internal state (disabled in production)
+- `logger.info()` - Normal operation milestones
+- `logger.warning()` - Recoverable issues
+- `logger.error()` - Operation failures
+- `logger.exception()` - Exceptions with traceback
+
+**JSON Output:**
+
+When configured, logs output as structured JSON:
+
+```json
+{
+  "timestamp": "2026-01-05T14:30:47.123Z",
+  "level": "INFO",
+  "name": "app.services.git",
+  "message": "Auto-commit and push completed",
+  "files_count": 3,
+  "duration_seconds": 45.23
+}
+```
+
+**Common Fields:**
+
+- `error` - Error message (string)
+- `error_type` - Exception type name (string)
+- `duration_seconds` - Operation duration (float)
+- `cost_usd` - API cost (float)
+- `files_count` - Number of files (int)
+- `dump_id` - Unique capture ID (string)
+
+**Configuration:**
+
+Logging is initialized at startup in `app/main.py:29`:
+
+```python
+from app.logging_config import configure_json_logging
+
+configure_json_logging(log_level=settings.log_level)
+```
+
+See `LOGGING_STANDARDS.md` for detailed guidelines and examples.
+
+Asyncio warning suppressed for Claude SDK task context issue (app/main.py:36-43).
 
 ### Concurrency Model: Pure Asyncio Only
 

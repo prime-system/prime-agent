@@ -110,7 +110,10 @@ async def safe_background_task(
     tracker = get_task_tracker()
 
     try:
-        logger.debug(f"Starting background task: {task_name}")
+        logger.debug(
+            "Starting background task",
+            extra={"task_name": task_name},
+        )
 
         if asyncio.iscoroutinefunction(coro):
             await coro()
@@ -118,13 +121,20 @@ async def safe_background_task(
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, coro)
 
-        logger.info(f"Background task completed: {task_name}")
+        logger.info(
+            "Background task completed",
+            extra={"task_name": task_name},
+        )
         await tracker.record_success(task_name)
 
     except Exception as e:
         logger.error(
-            f"Background task failed: {task_name}",
+            "Background task failed",
             exc_info=True,
-            extra={"task_name": task_name, "error_type": type(e).__name__},
+            extra={
+                "task_name": task_name,
+                "error": str(e),
+                "error_type": type(e).__name__,
+            },
         )
         await tracker.record_failure(task_name, e)

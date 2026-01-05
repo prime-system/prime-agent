@@ -77,12 +77,22 @@ class AgentService:
 
         if vault_command_path.exists():
             # Use slash command - SDK will load it automatically
-            logger.info(f"Using /processCapture slash command from vault: {vault_command_path}")
+            logger.info(
+                "Using processCapture command from vault",
+                extra={
+                    "command_path": str(vault_command_path),
+                },
+            )
             return "/processCapture"
 
         # Fall back to loading template content from source code
         template_path = Path(__file__).parent.parent / "prompts" / "processCapture.md"
-        logger.info(f"No vault command found, loading template content: {template_path}")
+        logger.info(
+            "No vault command found, loading template",
+            extra={
+                "template_path": str(template_path),
+            },
+        )
 
         if not template_path.exists():
             msg = f"processCapture template not found: {template_path}"
@@ -100,7 +110,12 @@ class AgentService:
             # No frontmatter, use as-is
             actual_content = command_content.strip()
 
-        logger.debug(f"Loaded template content ({len(actual_content)} chars)")
+        logger.debug(
+            "Loaded template content",
+            extra={
+                "content_length": len(actual_content),
+            },
+        )
         return actual_content
 
     async def process_dumps(self) -> ProcessResult:
@@ -168,7 +183,12 @@ class AgentService:
                     # Check if processing was successful
                     if message.is_error:
                         error_msg = "Agent processing failed"
-                        logger.error(f"Agent returned error: {message}")
+                        logger.error(
+                            "Agent returned error",
+                            extra={
+                                "message": str(message),
+                            },
+                        )
 
         try:
             # Wrap agent processing with timeout
@@ -185,7 +205,12 @@ class AgentService:
 
         except TimeoutError:
             error_msg = f"Agent processing timed out after {self.timeout_seconds}s"
-            logger.error(error_msg)
+            logger.error(
+                "Agent processing timed out",
+                extra={
+                    "timeout_seconds": self.timeout_seconds,
+                },
+            )
             return {
                 "success": False,
                 "cost_usd": None,
@@ -193,7 +218,13 @@ class AgentService:
                 "error": error_msg,
             }
         except Exception as e:
-            logger.exception("Agent processing failed with exception")
+            logger.exception(
+                "Agent processing failed with exception",
+                extra={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+            )
             return {
                 "success": False,
                 "cost_usd": None,

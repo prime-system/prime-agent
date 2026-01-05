@@ -39,6 +39,7 @@ dev = [
     "isort>=7.0.0",
     "pre-commit>=3.8.0",
     "pip-tools>=7.0.0",
+    "python-json-logger>=3.0.0",
 ]
 
 [build-system]

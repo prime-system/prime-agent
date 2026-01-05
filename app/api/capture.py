@@ -39,7 +39,13 @@ async def capture(
     """
     dump_id = inbox_service.generate_dump_id(request.captured_at, request.source.value)
 
-    logger.info(f"Capture received: {dump_id}")
+    logger.info(
+        "Capture received",
+        extra={
+            "dump_id": dump_id,
+            "source": request.source.value,
+        },
+    )
 
     # Generate title if the file pattern requires it
     title = None
@@ -47,9 +53,21 @@ async def capture(
         try:
             title_generator = TitleGenerator()
             title = await title_generator.generate_title(request.text)
-            logger.info(f"Generated title for {dump_id}: {title}")
+            logger.info(
+                "Generated title for capture",
+                extra={
+                    "dump_id": dump_id,
+                    "title": title,
+                },
+            )
         except Exception as e:
-            logger.warning(f"Title generation failed for {dump_id}: {e}, using fallback")
+            logger.warning(
+                "Title generation failed for capture",
+                extra={
+                    "dump_id": dump_id,
+                    "error": str(e),
+                },
+            )
             # Fallback is handled in title_generator
 
     inbox_file = vault_service.get_capture_file(
@@ -61,9 +79,25 @@ async def capture(
         # Write capture to its own file with frontmatter
         content = inbox_service.format_capture_file(request, dump_id)
         inbox_service.write_capture(inbox_file, content)
-        logger.info(f"Capture saved locally: {dump_id} -> {relative_path}")
+        logger.info(
+            "Capture saved locally",
+            extra={
+                "dump_id": dump_id,
+                "relative_path": relative_path,
+                "size_bytes": len(content),
+            },
+        )
     except OSError as e:
-        logger.error(f"Failed to write capture file for {dump_id}: {e}")
+        logger.error(
+            "Failed to write capture file",
+            extra={
+                "dump_id": dump_id,
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "path": str(inbox_file),
+            },
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to save capture",

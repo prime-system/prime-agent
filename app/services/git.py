@@ -62,7 +62,14 @@ class GitService:
         git_dir = self.vault_path / ".git"
 
         if not git_dir.exists():
-            logger.info(f"Cloning vault from {self.repo_url} (timeout={self.timeout_seconds}s)")
+            logger.info(
+                "Cloning vault from repository",
+                extra={
+                    "repo_url": self.repo_url,
+                    "timeout_seconds": self.timeout_seconds,
+                    "vault_path": str(self.vault_path),
+                },
+            )
             try:
                 self._repo = git.Repo.clone_from(
                     self.repo_url,
@@ -71,13 +78,32 @@ class GitService:
                 )
             except subprocess.TimeoutExpired:
                 msg = f"Git clone timed out after {self.timeout_seconds}s"
-                logger.error(msg)
+                logger.error(
+                    "Git clone timed out",
+                    extra={
+                        "timeout_seconds": self.timeout_seconds,
+                        "repo_url": self.repo_url,
+                    },
+                )
                 raise GitError(msg)
             except git.GitCommandError as e:
-                logger.error(f"Git clone failed: {e}")
+                logger.error(
+                    "Git clone failed",
+                    extra={
+                        "repo_url": self.repo_url,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                    },
+                    exc_info=True,
+                )
                 raise GitError(str(e)) from e
         else:
-            logger.info(f"Opening existing vault at {self.vault_path}")
+            logger.info(
+                "Opening existing vault",
+                extra={
+                    "vault_path": str(self.vault_path),
+                },
+            )
             self._repo = git.Repo(self.vault_path)
 
         # Configure commit author
@@ -109,10 +135,22 @@ class GitService:
             logger.debug("Git pull completed")
         except subprocess.TimeoutExpired:
             msg = f"Git pull timed out after {self.timeout_seconds}s"
-            logger.error(msg)
+            logger.error(
+                "Git pull timed out",
+                extra={
+                    "timeout_seconds": self.timeout_seconds,
+                },
+            )
             raise GitError(msg)
         except git.GitCommandError as e:
-            logger.error(f"Git pull failed: {e}")
+            logger.error(
+                "Git pull failed",
+                extra={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+                exc_info=True,
+            )
             msg = f"Pull failed: {e}"
             raise GitError(msg) from e
 
@@ -141,7 +179,13 @@ class GitService:
 
             return changed
         except git.GitCommandError as e:
-            logger.warning(f"Failed to get changed files: {e}")
+            logger.warning(
+                "Failed to get changed files",
+                extra={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+            )
             return []
 
     def commit(self, message: str, paths: list[str]) -> None:
@@ -155,7 +199,12 @@ class GitService:
         Local-only: No-op
         """
         if not self.enabled:
-            logger.debug(f"Git disabled - skipping commit: {message}")
+            logger.debug(
+                "Git disabled - skipping commit",
+                extra={
+                    "message": message,
+                },
+            )
             return
 
         if self._repo is None:
@@ -168,10 +217,25 @@ class GitService:
 
             # Commit
             self._repo.index.commit(message)
-            logger.debug(f"Committed: {message}")
+            logger.debug(
+                "Git commit completed",
+                extra={
+                    "message": message,
+                    "files_count": len(paths),
+                },
+            )
 
         except git.GitCommandError as e:
-            logger.error(f"Git commit failed: {e}")
+            logger.error(
+                "Git commit failed",
+                extra={
+                    "message": message,
+                    "files_count": len(paths),
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+                exc_info=True,
+            )
             msg = f"Commit failed: {e}"
             raise GitError(msg) from e
 
@@ -199,10 +263,22 @@ class GitService:
             logger.debug("Git push completed")
         except subprocess.TimeoutExpired:
             msg = f"Git push timed out after {self.timeout_seconds}s"
-            logger.error(msg)
+            logger.error(
+                "Git push timed out",
+                extra={
+                    "timeout_seconds": self.timeout_seconds,
+                },
+            )
             raise GitError(msg)
         except git.GitCommandError as e:
-            logger.error(f"Git push failed: {e}")
+            logger.error(
+                "Git push failed",
+                extra={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+                exc_info=True,
+            )
             msg = f"Push failed: {e}"
             raise GitError(msg) from e
 
@@ -241,7 +317,7 @@ class GitService:
 
         if self._repo is None:
             msg = "Repository not initialized - cannot auto-commit"
-            logger.error(msg)
+            logger.error("Repository not initialized")
             raise GitError(msg)
 
         try:
@@ -251,7 +327,12 @@ class GitService:
                 logger.debug("No changes to auto-commit")
                 return True
 
-            logger.debug(f"Auto-committing {len(changed_files)} files")
+            logger.debug(
+                "Auto-committing changes",
+                extra={
+                    "files_count": len(changed_files),
+                },
+            )
 
             # Create commit message with timestamp
             timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -259,13 +340,33 @@ class GitService:
 
             # Commit and push all changed files
             self.commit_and_push(message, changed_files)
-            logger.info(f"Auto-committed {len(changed_files)} files: {changed_files}")
+            logger.info(
+                "Auto-commit and push completed",
+                extra={
+                    "files_count": len(changed_files),
+                    "timestamp": timestamp,
+                },
+            )
             return True
 
         except GitError as e:
-            logger.error(f"Auto-commit failed: {e}", exc_info=True)
+            logger.error(
+                "Auto-commit and push failed",
+                extra={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+                exc_info=True,
+            )
             raise
         except Exception as e:
             error_msg = f"Unexpected error during auto-commit: {e}"
-            logger.error(error_msg, exc_info=True)
+            logger.error(
+                "Unexpected error during auto-commit",
+                extra={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+                exc_info=True,
+            )
             raise GitError(error_msg) from e

@@ -71,7 +71,12 @@ class AgentWorker:
             log_service: Service for creating audit logs
         """
         cls._instance = cls(agent_service, git_service, log_service)
-        logger.info("Agent worker initialized")
+        logger.info(
+            "Agent worker initialized",
+            extra={
+                "git_enabled": git_service.enabled,
+            },
+        )
 
     @classmethod
     def is_processing(cls) -> bool:
@@ -103,7 +108,7 @@ class AgentWorker:
 
         # Fire and forget - create background task
         asyncio.create_task(cls._instance._process())
-        logger.info("Worker triggered (background task created)")
+        logger.info("Worker trigger: background task created")
 
     async def _process(self) -> None:
         """
@@ -142,7 +147,13 @@ class AgentWorker:
                         self.git_service.pull()
                         logger.debug("Git pull completed")
                     except GitError as e:
-                        logger.error(f"Git pull failed: {e}")
+                        logger.error(
+                            "Git pull failed",
+                            extra={
+                                "error": str(e),
+                                "error_type": type(e).__name__,
+                            },
+                        )
                         # Continue anyway - agent might still work with local files
 
                 # Process dumps with agent
@@ -167,13 +178,28 @@ class AgentWorker:
                         try:
                             commit_msg = f"Process: inbox dumps ({len(changed_files)} files changed)"
                             self.git_service.commit_and_push(commit_msg, changed_files)
-                            logger.info(f"Committed {len(changed_files)} file(s)")
+                            logger.info(
+                                "Processing committed to git",
+                                extra={
+                                    "files_count": len(changed_files),
+                                },
+                            )
                         except GitError as e:
-                            logger.error(f"Git commit/push failed: {e}")
+                            logger.error(
+                                "Git commit and push failed",
+                                extra={
+                                    "files_count": len(changed_files),
+                                    "error": str(e),
+                                    "error_type": type(e).__name__,
+                                },
+                            )
                             # Log is already created locally, not critical
                     logger.info(
-                        f"Processing complete: {duration_seconds:.1f}s, "
-                        f"${result.get('cost_usd', 0):.4f}"
+                        "Processing completed successfully",
+                        extra={
+                            "duration_seconds": round(duration_seconds, 2),
+                            "cost_usd": round(result.get("cost_usd", 0), 4),
+                        },
                     )
                 else:
                     # Even on failure, commit the log
@@ -183,9 +209,19 @@ class AgentWorker:
                                 "Process: failed (see log)", changed_files
                             )
                         except GitError as e:
-                            logger.error(f"Git commit failed (error log): {e}")
+                            logger.error(
+                                "Git commit failed (error log)",
+                                extra={
+                                    "error": str(e),
+                                    "error_type": type(e).__name__,
+                                },
+                            )
                     logger.error(
-                        f"Processing failed after {duration_seconds:.1f}s: {result.get('error')}"
+                        "Processing failed",
+                        extra={
+                            "duration_seconds": round(duration_seconds, 2),
+                            "error": result.get("error"),
+                        },
                     )
 
         except Exception as e:
