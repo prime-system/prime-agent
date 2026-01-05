@@ -1,3 +1,4 @@
+import logging
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -6,6 +7,9 @@ from typing import Any
 import yaml
 
 from app.models.capture import CaptureRequest
+from app.utils.frontmatter import parse_frontmatter
+
+logger = logging.getLogger(__name__)
 
 
 class InboxService:
@@ -129,22 +133,16 @@ class InboxService:
                 try:
                     content = md_file.read_text(encoding="utf-8")
 
-                    # Parse YAML frontmatter
-                    if not content.startswith("---\n"):
+                    # Parse YAML frontmatter using robust parser
+                    parsed = parse_frontmatter(content)
+                    metadata = parsed.frontmatter
+                    body = parsed.body
+
+                    # Skip if no metadata or missing required fields
+                    if not metadata or not metadata.get("id"):
                         continue
 
-                    # Find the closing ---
-                    end_idx = content.find("\n---\n", 4)
-                    if end_idx == -1:
-                        continue
-
-                    yaml_content = content[4:end_idx]
-                    metadata = yaml.safe_load(yaml_content)
-
-                    # Extract body content (after second ---)
-                    body_start = end_idx + 5  # len("\n---\n")
-                    body = content[body_start:].strip()
-                    preview = body[:100] if len(body) > 100 else body
+                    preview = body.strip()[:100]
 
                     # Build response dict
                     unprocessed.append(
@@ -158,8 +156,15 @@ class InboxService:
                         }
                     )
 
-                except Exception:
-                    # Skip files that can't be parsed
+                except Exception as e:
+                    # Log and skip files that can't be parsed
+                    logger.debug(
+                        "Failed to parse capture file",
+                        extra={
+                            "file": str(md_file),
+                            "error": str(e),
+                        },
+                    )
                     continue
 
         except FileNotFoundError:
@@ -197,26 +202,19 @@ class InboxService:
             try:
                 content = md_file.read_text(encoding="utf-8")
 
-                # Parse YAML frontmatter
-                if not content.startswith("---\n"):
+                # Parse YAML frontmatter using robust parser
+                parsed = parse_frontmatter(content)
+                metadata = parsed.frontmatter
+                body = parsed.body
+
+                # Skip if already processed or no metadata
+                if not metadata or not metadata.get("id"):
                     continue
 
-                # Find the closing ---
-                end_idx = content.find("\n---\n", 4)
-                if end_idx == -1:
-                    continue
-
-                yaml_content = content[4:end_idx]
-                metadata = yaml.safe_load(yaml_content)
-
-                # Skip if already processed
                 if metadata.get("processed") is True:
                     continue
 
-                # Extract body content (after second ---)
-                body_start = end_idx + 5  # len("\n---\n")
-                body = content[body_start:].strip()
-                preview = body[:100] if len(body) > 100 else body
+                preview = body.strip()[:100]
 
                 # Build response dict
                 unprocessed.append(
@@ -230,8 +228,15 @@ class InboxService:
                     }
                 )
 
-            except Exception:
-                # Skip files that can't be parsed
+            except Exception as e:
+                # Log and skip files that can't be parsed
+                logger.debug(
+                    "Failed to parse capture file",
+                    extra={
+                        "file": str(md_file),
+                        "error": str(e),
+                    },
+                )
                 continue
 
         # Sort by captured_at (oldest first)

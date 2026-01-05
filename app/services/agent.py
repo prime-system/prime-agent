@@ -12,6 +12,12 @@ from typing import TypedDict
 
 from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
 
+from app.utils.frontmatter import (
+    FrontmatterError,
+    parse_and_validate_command,
+    strip_frontmatter,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -100,15 +106,13 @@ class AgentService:
 
         command_content = template_path.read_text()
 
-        # Strip YAML frontmatter (content between --- and ---)
-        # Format: ---\nkey: value\n---\nactual content
-        parts = command_content.split("---")
-        if len(parts) >= 3:
-            # Frontmatter exists, use content after second ---
-            actual_content = "---".join(parts[2:]).strip()
-        else:
-            # No frontmatter, use as-is
-            actual_content = command_content.strip()
+        # Strip YAML frontmatter using robust parser
+        try:
+            _, actual_content = parse_and_validate_command(command_content)
+            actual_content = actual_content.strip()
+        except FrontmatterError:
+            # If parsing fails, try simple fallback
+            actual_content = strip_frontmatter(command_content).strip()
 
         logger.debug(
             "Loaded template content",
