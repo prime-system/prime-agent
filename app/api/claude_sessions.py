@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from app.dependencies import get_claude_session_api
 from app.services.claude_session_api import ClaudeSessionAPI
+from app.utils.path_validation import PathValidationError, validate_session_id
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/claude-sessions", tags=["claude-sessions"])
@@ -99,17 +100,26 @@ async def get_session(
         Complete session data with messages
 
     Raises:
-        HTTPException: If session not found (404)
+        HTTPException: If session not found (404) or invalid (400)
     """
-    session = claude_session_api.get_session(session_id)
+    # Validate session_id format to prevent path traversal
+    try:
+        validated_id = validate_session_id(session_id)
+    except PathValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid session ID: {e}",
+        )
+
+    session = claude_session_api.get_session(validated_id)
 
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found",
+            detail=f"Session {validated_id} not found",
         )
 
-    logger.info("Retrieved Claude session %s with %d messages", session_id, session["message_count"])
+    logger.info("Retrieved Claude session %s with %d messages", validated_id, session["message_count"])
 
     return SessionDetailResponse(**session)
 
@@ -136,22 +146,31 @@ async def get_session_messages(
         List of messages
 
     Raises:
-        HTTPException: If session not found (404)
+        HTTPException: If session not found (404) or invalid (400)
     """
+    # Validate session_id format to prevent path traversal
+    try:
+        validated_id = validate_session_id(session_id)
+    except PathValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid session ID: {e}",
+        )
+
     # Verify session exists
-    summary = claude_session_api.get_session_summary(session_id)
+    summary = claude_session_api.get_session_summary(validated_id)
     if not summary:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found",
+            detail=f"Session {validated_id} not found",
         )
 
-    messages = claude_session_api.get_session_messages(session_id, roles=roles)
+    messages = claude_session_api.get_session_messages(validated_id, roles=roles)
 
-    logger.info("Retrieved %d messages from Claude session %s", len(messages), session_id)
+    logger.info("Retrieved %d messages from Claude session %s", len(messages), validated_id)
 
     return MessageListResponse(
-        session_id=session_id,
+        session_id=validated_id,
         messages=messages,
         message_count=len(messages),
     )
@@ -174,14 +193,23 @@ async def get_session_summary(
         Session metadata
 
     Raises:
-        HTTPException: If session not found (404)
+        HTTPException: If session not found (404) or invalid (400)
     """
-    summary = claude_session_api.get_session_summary(session_id)
+    # Validate session_id format to prevent path traversal
+    try:
+        validated_id = validate_session_id(session_id)
+    except PathValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid session ID: {e}",
+        )
+
+    summary = claude_session_api.get_session_summary(validated_id)
 
     if not summary:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found",
+            detail=f"Session {validated_id} not found",
         )
 
     return summary

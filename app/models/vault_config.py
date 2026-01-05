@@ -1,9 +1,11 @@
 """Vault-specific configuration loaded from .prime/settings.yaml in the vault root."""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class InboxConfig(BaseModel):
@@ -25,11 +27,86 @@ class InboxConfig(BaseModel):
         ),
     )
 
+    @field_validator("folder")
+    @classmethod
+    def validate_folder(cls, v: str) -> str:
+        """Validate folder path to prevent directory traversal."""
+        if not v or not isinstance(v, str):
+            msg = "folder must be a non-empty string"
+            raise ValueError(msg)
+
+        # Check for path traversal
+        if ".." in v:
+            msg = "folder cannot contain '..'"
+            raise ValueError(msg)
+
+        # Check for absolute paths
+        if v.startswith(("/", "\\")):
+            msg = "folder must be relative"
+            raise ValueError(msg)
+
+        # Check for null bytes
+        if "\x00" in v:
+            msg = "folder cannot contain null bytes"
+            raise ValueError(msg)
+
+        return v
+
+    @field_validator("file_pattern")
+    @classmethod
+    def validate_file_pattern(cls, v: str) -> str:
+        """Validate file pattern to prevent path traversal in filenames."""
+        if not v or not isinstance(v, str):
+            msg = "file_pattern must be a non-empty string"
+            raise ValueError(msg)
+
+        # Check for path traversal
+        if ".." in v:
+            msg = "file_pattern cannot contain '..'"
+            raise ValueError(msg)
+
+        # Check for path separators (these should be in placeholders, not literal paths)
+        if "/" in v or "\\" in v:
+            msg = "file_pattern cannot contain path separators"
+            raise ValueError(msg)
+
+        # Check for null bytes
+        if "\x00" in v:
+            msg = "file_pattern cannot contain null bytes"
+            raise ValueError(msg)
+
+        return v
+
 
 class LogsConfig(BaseModel):
     """Configuration for the logs folder."""
 
     folder: str = Field(default=".prime/logs", description="Path to logs folder relative to vault root")
+
+    @field_validator("folder")
+    @classmethod
+    def validate_folder(cls, v: str) -> str:
+        """Validate folder path to prevent directory traversal."""
+        if not v or not isinstance(v, str):
+            msg = "folder must be a non-empty string"
+            raise ValueError(msg)
+
+        # Check for path traversal
+        if ".." in v:
+            msg = "folder cannot contain '..'"
+            raise ValueError(msg)
+
+        # Check for absolute paths
+        if v.startswith(("/", "\\")):
+            msg = "folder must be relative"
+            raise ValueError(msg)
+
+        # Check for null bytes
+        if "\x00" in v:
+            msg = "folder cannot contain null bytes"
+            raise ValueError(msg)
+
+        return v
 
 
 class VaultConfig(BaseModel):
