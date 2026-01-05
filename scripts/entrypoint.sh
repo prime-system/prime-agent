@@ -14,7 +14,8 @@ CONFIG_PARSER="/app/scripts/parse_config.py"
 if [ -f "$CONFIG_PARSER" ]; then
     # Parse config.yaml and export variables
     # This sets: GIT_ENABLED, VAULT_REPO_URL, VAULT_PATH, WORKSPACE_PATH, etc.
-    if eval "$(python3 "$CONFIG_PARSER" "$CONFIG_FILE" 2>&1)"; then
+    # Use uv run to ensure Python has access to installed dependencies (PyYAML)
+    if eval "$(cd /app && uv run python "$CONFIG_PARSER" "$CONFIG_FILE" 2>&1)"; then
         echo "Configuration loaded from $CONFIG_FILE"
     else
         echo "WARNING: Failed to parse config file, using defaults and env vars"
@@ -136,4 +137,4 @@ chown -R prime:prime /home/prime
 cd /app
 
 echo "Starting FastAPI server on port 8000..."
-exec su prime -c "cd /app && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+exec su prime -c "cd /app && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000"
