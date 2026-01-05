@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import os
 import re
 from pathlib import Path
 
 import yaml
-from pydantic import ValidationError
+from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -95,6 +97,39 @@ def load_config_from_yaml(config_path: str | None = None) -> dict:
     return config_dict
 
 
+def _get_cors_origins_from_base_url(base_url: str | None, environment: str) -> list[str]:
+    """
+    Derive CORS allowed origins from BASE_URL configuration.
+
+    Args:
+        base_url: The base URL of the application (e.g., https://app.example.com)
+        environment: The deployment environment (development or production)
+
+    Returns:
+        List of allowed CORS origins automatically derived from base_url
+    """
+    origins: list[str] = []
+
+    if base_url:
+        # Add the configured base URL
+        origins.append(base_url.rstrip("/"))
+
+    # In development, also allow common localhost aliases for local testing
+    if environment == "development":
+        dev_origins = [
+            "http://localhost:3000",
+            "http://localhost:8000",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:8000",
+        ]
+        # Add dev origins that aren't already in the list
+        for origin in dev_origins:
+            if origin not in origins:
+                origins.append(origin)
+
+    return origins
+
+
 # Build trigger: v4
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -109,6 +144,9 @@ class Settings(BaseSettings):
     workspace_path: str = "/workspace"
     workspaces_enabled: bool = False  # Enable workspace/vault switching
 
+    # Base URL configuration
+    base_url: str | None = None  # Base URL of the application (e.g., https://app.example.com)
+
     # Git configuration (all optional)
     git_enabled: bool = False  # Git toggle (default: false for safe local dev)
     vault_repo_url: str | None = None  # Required only if git_enabled=true
@@ -118,6 +156,17 @@ class Settings(BaseSettings):
 
     # Security
     auth_token: str  # Required
+    environment: str = "development"  # Environment mode (development or production)
+
+    # CORS configuration (auto-derived from base_url, no explicit config needed)
+    cors_enabled: bool = True
+    cors_allowed_origins: list[str] = Field(default=[])
+    cors_allowed_methods: list[str] = Field(
+        default=["POST", "GET", "OPTIONS"]
+    )
+    cors_allowed_headers: list[str] = Field(
+        default=["Authorization", "Content-Type"]
+    )
 
     # Agent configuration
     anthropic_api_key: str  # Required for Claude Agent SDK
@@ -143,6 +192,32 @@ class Settings(BaseSettings):
         if self.git_enabled and not self.vault_repo_url:
             msg = "git.enabled=true requires git.repo_url to be set in config.yaml"
             raise ValueError(msg)
+
+    def validate_cors_config(self) -> None:
+        """Validate CORS configuration for security.
+
+        Ensures:
+        - All production origins use HTTPS
+        - At least one origin is configured if CORS is enabled in production
+        """
+        if not self.cors_enabled:
+            return
+
+        # Production: ensure all origins are HTTPS
+        if self.environment == "production":
+            if not self.cors_allowed_origins:
+                msg = (
+                    "Production environment has no CORS origins configured.\n"
+                    "Set base_url in config.yaml (e.g., base_url: https://app.example.com)\n"
+                    "CORS origins are automatically derived from base_url."
+                )
+                raise ValueError(msg)
+
+            # Validate all production origins are HTTPS
+            for origin in self.cors_allowed_origins:
+                if not origin.startswith("https://"):
+                    msg = f"CORS origin must be HTTPS in production: {origin}"
+                    raise ValueError(msg)
 
     def validate_apn_config(self) -> None:
         """Validate APNs configuration consistency."""
@@ -217,6 +292,32 @@ def _build_settings_from_yaml() -> Settings:
     if "logging" in config_dict and isinstance(config_dict["logging"], dict):
         flat_config["log_level"] = config_dict["logging"].get("level", "INFO")
 
+    # Base URL configuration
+    if "base_url" in config_dict:
+        flat_config["base_url"] = config_dict.get("base_url")
+
+    # Environment mode
+    environment = config_dict.get("environment", "development")
+    flat_config["environment"] = environment
+
+    # CORS configuration - auto-derive from base_url (simplified!)
+    if "cors" in config_dict and isinstance(config_dict["cors"], dict):
+        flat_config["cors_enabled"] = config_dict["cors"].get("enabled", True)
+        # Only parse explicit overrides (for advanced use cases)
+        if "allowed_origins" in config_dict["cors"]:
+            flat_config["cors_allowed_origins"] = config_dict["cors"]["allowed_origins"]
+        if "allowed_methods" in config_dict["cors"]:
+            flat_config["cors_allowed_methods"] = config_dict["cors"]["allowed_methods"]
+        if "allowed_headers" in config_dict["cors"]:
+            flat_config["cors_allowed_headers"] = config_dict["cors"]["allowed_headers"]
+    else:
+        flat_config["cors_enabled"] = True
+
+    # If cors_allowed_origins not explicitly set, derive from base_url
+    if "cors_allowed_origins" not in flat_config:
+        base_url = flat_config.get("base_url")
+        flat_config["cors_allowed_origins"] = _get_cors_origins_from_base_url(base_url, environment)
+
     # Apple Push Notifications (APNs) - optional
     if "apn" in config_dict and isinstance(config_dict["apn"], dict):
         flat_config["apn_enabled"] = config_dict["apn"].get("enabled", False)
@@ -244,7 +345,10 @@ def _build_settings_from_yaml() -> Settings:
 
     # Create Settings object
     try:
-        return Settings(**flat_config)  # type: ignore[arg-type]
+        settings_obj = Settings(**flat_config)  # type: ignore[arg-type]
+        # Validate CORS configuration
+        settings_obj.validate_cors_config()
+        return settings_obj
     except ValidationError as e:
         print(f"Configuration validation error: {e}")
         raise

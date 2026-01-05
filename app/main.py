@@ -217,13 +217,26 @@ app = FastAPI(
 )
 
 # Configure CORS for SSE streaming from client apps
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins (can be restricted in production)
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+if settings.cors_enabled:
+    # Validate CORS configuration
+    allowed_origins = settings.cors_allowed_origins
+    if settings.environment == "production":
+        for origin in allowed_origins:
+            if not origin.startswith("https://"):
+                msg = f"CORS origin must be HTTPS in production: {origin}"
+                raise ValueError(msg)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_credentials=True,
+        allow_methods=settings.cors_allowed_methods,
+        allow_headers=settings.cors_allowed_headers,
+        max_age=3600,  # Cache preflight for 1 hour
+    )
+    logger.info(f"CORS configured for origins: {allowed_origins}")
+else:
+    logger.warning("CORS is disabled - cross-origin requests will be blocked")
 
 app.include_router(capture.router, tags=["capture"])
 app.include_router(chat.router)

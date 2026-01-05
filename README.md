@@ -88,6 +88,19 @@ GIT_USERNAME=
 GIT_TOKEN=
 ```
 
+**2b. Configure `config.default.yaml` (optional)**
+
+By default, the config uses sensible development defaults. For custom setup:
+
+```bash
+# Copy and edit the default config (optional)
+cp config.default.yaml config.yaml
+
+# Edit config.yaml:
+# - Set environment: development or production
+# - Set base_url: http://localhost:8000 (dev) or https://app.example.com (prod)
+```
+
 **3. Start the server**
 
 ```bash
@@ -302,11 +315,52 @@ APPLE_KEY_ID=your-key-id
 APPLE_P8_KEY=-----BEGIN PRIVATE KEY-----...
 ```
 
+**Optional (Environment & CORS):**
+```bash
+ENVIRONMENT=development  # or "production"
+```
+
 **Optional (Advanced):**
 ```bash
 ANTHROPIC_BASE_URL=https://custom-api-endpoint.com
 CONFIG_PATH=/app/config.yaml
 ```
+
+### Environment & Deployment Configuration
+
+PrimeAgent requires you to specify the deployment environment and base URL:
+
+**Development:**
+```yaml
+# config.yaml
+environment: development
+base_url: http://localhost:8000
+
+# CORS automatically includes:
+# - http://localhost:8000
+# - http://localhost:3000
+# - http://127.0.0.1:3000
+# - http://127.0.0.1:8000
+```
+
+**Production:**
+```yaml
+# config.yaml
+environment: production
+base_url: https://app.example.com
+
+# CORS automatically includes:
+# - https://app.example.com
+# HTTPS is enforced at startup
+```
+
+**Environment Variables:**
+```bash
+# Set deployment environment
+ENVIRONMENT=production  # defaults to "development"
+```
+
+> **Important:** In production, `base_url` must use HTTPS. The server will fail to start if HTTP is configured in production mode. This prevents CSRF attacks via explicit origin allowlisting.
 
 ### Git Configuration
 

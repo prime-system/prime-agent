@@ -75,10 +75,13 @@ The `docker-compose.yml` provides a complete development environment:
 - `AUTH_TOKEN` - API authentication token (required)
 
 **Optional Environment Variables:**
+- `ENVIRONMENT` - Deployment environment ("development" or "production", defaults to development)
 - `ANTHROPIC_BASE_URL` - Custom Anthropic API endpoint
 - `GIT_SSH_KEY` - SSH private key for git (if git enabled)
 - `GIT_USERNAME` - Git username for HTTPS (if git enabled)
 - `GIT_TOKEN` - Git token/password for HTTPS (if git enabled)
+
+Note: CORS configuration is **automatic** via `base_url` setting in config.yaml. No additional environment variables needed!
 
 **Example .env file:**
 ```bash
@@ -191,6 +194,29 @@ The application uses a **dependency injection pattern** where services are initi
    - Loaded lazily with change detection (app/services/vault.py:19-46)
    - See VAULT_CONFIG.md for full documentation
 
+**CORS Configuration** - Automatically derived from `base_url`:
+   - Set `base_url` in `config.yaml` (e.g., `https://app.example.com`)
+   - CORS origins auto-derived based on environment (development vs production)
+   - Development: base_url + localhost alternatives (http://localhost:3000, etc.)
+   - Production: base_url only + HTTPS enforced at startup
+   - HTTP methods: Limited to POST, GET, OPTIONS (no manual config needed)
+   - Headers: Limited to Authorization, Content-Type (no manual config needed)
+   - Security: Prevents CSRF attacks via explicit origin allowlist
+
+**Example config.yaml (Development):**
+```yaml
+environment: development
+base_url: http://localhost:8000
+```
+
+**Example config.yaml (Production):**
+```yaml
+environment: production
+base_url: https://app.example.com
+# CORS origins auto-derived to: ["https://app.example.com"]
+# HTTPS enforced - startup fails if HTTP base_url in production
+```
+
 ### Data Flow: Capture → Process → Organize
 
 **Capture Flow** (app/api/capture.py):
@@ -282,6 +308,69 @@ The system uses **Claude Agent SDK** (`claude_agent_sdk`) for autonomous process
 **Git Authentication:**
 - SSH: Requires `GIT_SSH_KEY` env var (private key)
 - HTTPS: Requires `GIT_USERNAME` and `GIT_TOKEN` env vars
+
+### CORS Security (Prevents CSRF Attacks)
+
+**Vulnerability Fixed:** CWE-352 (Cross-Site Request Forgery)
+
+The application enforces strict CORS (Cross-Origin Resource Sharing) policies to prevent malicious websites from injecting captures into user vaults. CORS origins are **automatically derived from `base_url`** - users don't need to manually configure domains.
+
+**How It Works:**
+
+1. **User sets `base_url` in config.yaml** (e.g., `https://app.example.com`)
+2. **CORS origins auto-derived based on environment:**
+   - Development: `base_url` + localhost alternatives (http://localhost:3000, http://127.0.0.1:3000, etc.)
+   - Production: `base_url` only (HTTPS enforced at startup)
+3. **Browser blocks unauthorized origins** before requests reach the server
+
+**Configuration (Development):**
+```yaml
+environment: development
+base_url: http://localhost:8000
+# CORS automatically includes:
+# - http://localhost:8000
+# - http://localhost:3000
+# - http://127.0.0.1:3000, http://127.0.0.1:8000
+```
+
+**Configuration (Production):**
+```yaml
+environment: production
+base_url: https://app.example.com
+# CORS automatically includes:
+# - https://app.example.com
+# - HTTPS enforced (startup fails with HTTP base_url)
+```
+
+**Automatic Restrictions (No Manual Config):**
+- HTTP Methods: POST, GET, OPTIONS (no DELETE, PUT, PATCH)
+- Headers: Authorization, Content-Type (no custom headers)
+- Preflight Cache: 3600 seconds (1 hour - prevents request flooding)
+
+**Security Guarantees:**
+- ✅ Explicit origin allowlist (no wildcards)
+- ✅ No credentials with wildcard origins
+- ✅ HTTPS enforced in production at startup
+- ✅ Browser blocks unauthorized origins
+- ✅ Tests verify all security scenarios (app/test_cors_security.py)
+
+**Attack Prevention Example:**
+```javascript
+// attacker.com/malicious.html
+fetch('https://primeapp.com/capture', {
+    method: 'POST',
+    credentials: 'include',  // Would be sent in old vulnerable config
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+        text: "Malicious capture injected into vault"
+    })
+})
+// ❌ BLOCKED: Browser sees Origin: attacker.com
+// ❌ Response missing Access-Control-Allow-Origin header
+// ❌ Request never reaches the server
+```
+
+See: `app/config.py:100-130` for `_get_cors_origins_from_base_url()` implementation and `tests/test_cors_security.py` for comprehensive security tests.
 
 ## Important Patterns
 

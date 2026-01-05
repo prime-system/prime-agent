@@ -8,9 +8,14 @@
 # - AUTH_TOKEN: API authentication token
 #
 # Optional environment variables:
+# - ENVIRONMENT: deployment environment (development or production)
 # - GIT_SSH_KEY: SSH private key for Git SSH authentication
 # - GIT_USERNAME: Username for HTTPS Git authentication
 # - GIT_TOKEN: Token/password for HTTPS Git authentication
+
+# Deployment environment (affects CORS, logging, and other settings)
+# Options: "development" or "production"
+environment: development
 
 vault:
   # Path to the knowledge base vault
@@ -68,6 +73,13 @@ auth:
 logging:
   # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
   level: "INFO"
+
+# Base URL of the application (used for CORS, redirects, etc.)
+# CORS origins are automatically derived from this URL
+# Examples:
+#   Development: http://localhost:8000 or http://localhost:3000
+#   Production: https://app.example.com
+base_url: http://localhost:8000
 
 apn:
   # Apple Push Notifications (APNs) configuration
