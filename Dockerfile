@@ -33,9 +33,9 @@ RUN groupadd --gid ${APP_GID} ${APP_USER} \
 RUN mkdir -p /home/${APP_USER}/.claude /home/${APP_USER}/.ssh /data/apn \
     && chown -R ${APP_USER}:${APP_USER} /home/${APP_USER} /data
 
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies from lock file
+COPY pyproject.toml uv.lock .
+RUN uv sync --frozen --no-dev
 
 # Copy application code and configuration template
 COPY --chown=${APP_USER}:${APP_USER} app/ app/

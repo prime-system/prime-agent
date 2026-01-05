@@ -36,7 +36,7 @@ The `.env` file is automatically loaded by docker-compose and **never committed*
 
 ### Quick Start with Make
 
-The project includes a Makefile for common development tasks:
+The project uses `uv` for fast, deterministic dependency management and includes a Makefile for common development tasks:
 
 ```bash
 # Show all available commands
@@ -50,13 +50,14 @@ make dev-logs         # Follow container logs
 make dev-shell        # Open bash shell in container
 
 # Local development
-make install-dev      # Install Python dev dependencies
+make install-dev      # Install Python + all dependencies using uv
 make lint             # Run ruff linter
 make lint-fix         # Auto-fix linting issues
 make format           # Format code with ruff
 make type-check       # Run mypy type checker
 make test             # Run pytest tests
 make check            # Run all checks (lint + type-check + test)
+make update-lock      # Update uv.lock with latest compatible versions
 make clean            # Remove cache files
 ```
 
@@ -94,19 +95,16 @@ GIT_SSH_KEY=-----BEGIN OPENSSH PRIVATE KEY-----...
 ### Manual Setup (without Docker)
 
 ```bash
-# Install dependencies (requires Python 3.11+)
-pip install -r requirements.txt
-
-# Install with development dependencies
-pip install -e ".[dev]"
+# Install dependencies and dev tools using uv (requires Python 3.11+)
+make install-dev
 
 # Run with uvicorn (development)
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### Code Quality
 
-All code quality commands work with the Makefile:
+All code quality commands work with the Makefile and use `uv run` to ensure tools run in the project environment:
 
 ```bash
 # Using Makefile (recommended)
@@ -114,13 +112,13 @@ make lint             # Run ruff linter
 make lint-fix         # Auto-fix linting issues
 make format           # Format code with ruff
 make type-check       # Run mypy type checker
-make check            # Run all checks
+make check            # Run all checks (lint + type-check + test)
 
 # Direct commands (if not using Make)
-ruff check app tests
-ruff check --fix app tests
-ruff format app tests
-mypy app tests
+uv run ruff check app tests
+uv run ruff check --fix app tests
+uv run ruff format app tests
+uv run mypy app tests
 ```
 
 ### Testing
@@ -129,11 +127,11 @@ mypy app tests
 # Using Makefile
 make test             # Run all tests
 
-# Direct pytest commands
-pytest                                    # Run all tests
-pytest --cov=app --cov-report=html       # With coverage
-pytest tests/test_vault.py -v            # Specific test file
-pytest tests/test_vault.py::test_name -v # Single test
+# Direct pytest commands (via uv run)
+uv run pytest                                    # Run all tests
+uv run pytest --cov=app --cov-report=html       # With coverage
+uv run pytest tests/test_vault.py -v            # Specific test file
+uv run pytest tests/test_vault.py::test_name -v # Single test
 ```
 
 ### Docker Volume Management
@@ -159,6 +157,42 @@ docker run --rm -v primeai_vault:/vault -v $(pwd):/backup alpine \
 make dev-down
 docker volume rm primeai_vault primeai_claude primeai_data
 ```
+
+### Dependency Management with uv
+
+The project uses `uv` for fast, deterministic dependency management:
+
+**Lock File:** `uv.lock`
+- Auto-generated from `pyproject.toml`
+- Committed to git for reproducible installs
+- Always keeps all dependencies up-to-date with project specifications
+
+**Local Development:**
+```bash
+make install-dev       # Installs all dependencies from uv.lock
+uv run pytest          # Run tests via uv
+uv run ruff check      # Run linter via uv
+```
+
+**Updating Dependencies:**
+```bash
+# Add new dependency (updates pyproject.toml + uv.lock)
+uv add package-name
+
+# Add dev dependency
+uv add --dev package-name
+
+# Update all dependencies to latest compatible versions
+make update-lock
+
+# Force specific version
+uv add package-name==1.2.3
+```
+
+**Docker Container:**
+- Uses `uv sync --frozen --no-dev` for deterministic, production-ready builds
+- All dependencies pinned to exact versions from uv.lock
+- Faster builds than pip-compile (~2-3x faster)
 
 ## Architecture
 
