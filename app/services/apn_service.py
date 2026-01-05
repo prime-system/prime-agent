@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -32,6 +33,7 @@ class APNService:
         key_id: str,
         bundle_id: str,
         environment: Literal["production", "development"] = "production",
+        timeout_seconds: int = 5,
     ) -> None:
         """
         Initialize APNs service.
@@ -43,6 +45,7 @@ class APNService:
             key_id: Apple Key ID
             bundle_id: Bundle ID for PrimeApp
             environment: APNs environment (production or development)
+            timeout_seconds: Timeout for APNs API calls in seconds
 
         Raises:
             ValueError: If credentials are invalid
@@ -50,6 +53,7 @@ class APNService:
         self.devices_file = devices_file
         self.bundle_id = bundle_id
         self.environment = environment
+        self.timeout_seconds = timeout_seconds
 
         try:
             if not key_content or not key_content.strip():
@@ -143,8 +147,19 @@ class APNService:
                 priority=apns_priority,
             )
 
-            # Send via APNs
-            await self.client.send_notification(request)
+            # Send via APNs with timeout
+            try:
+                await asyncio.wait_for(
+                    self.client.send_notification(request),
+                    timeout=self.timeout_seconds,
+                )
+            except asyncio.TimeoutError:
+                logger.error(
+                    "APNs notification timed out: token=...%s after %ds",
+                    device_token[-6:],
+                    self.timeout_seconds,
+                )
+                raise TimeoutError(f"APNs request timed out after {self.timeout_seconds}s")
 
             logger.info(
                 "Notification sent: token=...%s, priority=%s",

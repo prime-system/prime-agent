@@ -1,4 +1,5 @@
 import logging
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -25,12 +26,14 @@ class GitService:
         repo_url: str | None = None,
         user_name: str = "Prime Agent",
         user_email: str = "prime@local",
+        timeout_seconds: int = 30,
     ):
         self.vault_path = Path(vault_path)
         self.enabled = enabled
         self.repo_url = repo_url
         self.user_name = user_name
         self.user_email = user_email
+        self.timeout_seconds = timeout_seconds
         self._repo: git.Repo | None = None
 
     def initialize(self) -> None:
@@ -38,12 +41,15 @@ class GitService:
         Initialize vault repository (if Git is enabled).
 
         Git-enabled:
-          - If .git doesn't exist: clone from repo_url
+          - If .git doesn't exist: clone from repo_url (with timeout)
           - If .git exists: open existing repo
           - Configure git user for commits
 
         Local-only:
           - No-op (logs info message)
+
+        Raises:
+            GitError: If clone times out or other git operations fail
         """
         if not self.enabled:
             logger.info("Git disabled - running in local-only mode")
@@ -56,8 +62,20 @@ class GitService:
         git_dir = self.vault_path / ".git"
 
         if not git_dir.exists():
-            logger.info(f"Cloning vault from {self.repo_url}")
-            self._repo = git.Repo.clone_from(self.repo_url, self.vault_path)
+            logger.info(f"Cloning vault from {self.repo_url} (timeout={self.timeout_seconds}s)")
+            try:
+                self._repo = git.Repo.clone_from(
+                    self.repo_url,
+                    self.vault_path,
+                    env={"GIT_TERMINAL_PROMPT": "0"},  # Prevent interactive prompts
+                )
+            except subprocess.TimeoutExpired:
+                msg = f"Git clone timed out after {self.timeout_seconds}s"
+                logger.error(msg)
+                raise GitError(msg)
+            except git.GitCommandError as e:
+                logger.error(f"Git clone failed: {e}")
+                raise GitError(str(e)) from e
         else:
             logger.info(f"Opening existing vault at {self.vault_path}")
             self._repo = git.Repo(self.vault_path)
@@ -72,6 +90,9 @@ class GitService:
         Pull latest changes from origin (if Git is enabled).
 
         Local-only: No-op
+
+        Raises:
+            GitError: If pull operation fails or times out
         """
         if not self.enabled:
             return
@@ -82,8 +103,14 @@ class GitService:
 
         try:
             origin = self._repo.remotes.origin
-            origin.pull()
+            # GitPython doesn't support direct timeout, so we use git_command_timeout env var
+            with self._repo.git.custom_environment(GIT_TERMINAL_PROMPT="0"):
+                origin.pull()
             logger.debug("Git pull completed")
+        except subprocess.TimeoutExpired:
+            msg = f"Git pull timed out after {self.timeout_seconds}s"
+            logger.error(msg)
+            raise GitError(msg)
         except git.GitCommandError as e:
             logger.error(f"Git pull failed: {e}")
             msg = f"Pull failed: {e}"
@@ -153,6 +180,9 @@ class GitService:
         Push local commits to remote (if Git is enabled).
 
         Local-only: No-op
+
+        Raises:
+            GitError: If push operation fails or times out
         """
         if not self.enabled:
             return
@@ -163,8 +193,14 @@ class GitService:
 
         try:
             origin = self._repo.remotes.origin
-            origin.push()
+            # GitPython doesn't support direct timeout, so we use git_command_timeout env var
+            with self._repo.git.custom_environment(GIT_TERMINAL_PROMPT="0"):
+                origin.push()
             logger.debug("Git push completed")
+        except subprocess.TimeoutExpired:
+            msg = f"Git push timed out after {self.timeout_seconds}s"
+            logger.error(msg)
+            raise GitError(msg)
         except git.GitCommandError as e:
             logger.error(f"Git push failed: {e}")
             msg = f"Push failed: {e}"

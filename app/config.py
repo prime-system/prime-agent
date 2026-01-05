@@ -177,6 +177,20 @@ class Settings(BaseSettings):
     agent_model: str  # Required agent model for chat
     agent_max_budget_usd: float = 2.0  # Safety limit per processing run
 
+    # API timeouts (in seconds)
+    anthropic_timeout_seconds: int = Field(
+        default=1800,
+        description="Timeout for Anthropic API calls (includes long agent operations)",
+    )
+    apns_timeout_seconds: int = Field(
+        default=5,
+        description="Timeout for Apple Push Notification calls",
+    )
+    git_timeout_seconds: int = Field(
+        default=30,
+        description="Timeout for Git operations (clone, pull, push)",
+    )
+
     # Observability
     log_level: str = "INFO"
 

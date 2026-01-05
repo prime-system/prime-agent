@@ -5,6 +5,7 @@ This module provides the core integration with the Claude Agent SDK,
 managing the transformation of raw brain dumps into structured knowledge.
 """
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import TypedDict
@@ -42,6 +43,7 @@ class AgentService:
         api_key: str,
         base_url: str | None = None,
         max_budget_usd: float = 2.0,
+        timeout_seconds: int = 300,
     ):
         """
         Initialize agent service.
@@ -51,11 +53,13 @@ class AgentService:
             api_key: Anthropic API key
             base_url: Optional custom API endpoint
             max_budget_usd: Maximum cost per processing run (safety limit)
+            timeout_seconds: Timeout for agent processing in seconds
         """
         self.vault_path = Path(vault_path)
         self.api_key = api_key
         self.base_url = base_url
         self.max_budget_usd = max_budget_usd
+        self.timeout_seconds = timeout_seconds
 
     def _get_process_capture_prompt(self) -> str:
         """
@@ -81,7 +85,8 @@ class AgentService:
         logger.info(f"No vault command found, loading template content: {template_path}")
 
         if not template_path.exists():
-            raise AgentError(f"processCapture template not found: {template_path}")
+            msg = f"processCapture template not found: {template_path}"
+            raise AgentError(msg)
 
         command_content = template_path.read_text()
 
@@ -142,7 +147,10 @@ class AgentService:
         duration_ms: int = 0
         error_msg: str | None = None
 
-        try:
+        async def _agent_processing() -> None:
+            """Inner async function to stream messages from agent."""
+            nonlocal cost_usd, duration_ms, error_msg
+
             # Get the prompt - either slash command or template content
             command_prompt = self._get_process_capture_prompt()
 
@@ -162,6 +170,10 @@ class AgentService:
                         error_msg = "Agent processing failed"
                         logger.error(f"Agent returned error: {message}")
 
+        try:
+            # Wrap agent processing with timeout
+            await asyncio.wait_for(_agent_processing(), timeout=self.timeout_seconds)
+
             # Return processing results
             # Note: Worker handles git commit/push after this returns
             return {
@@ -171,6 +183,15 @@ class AgentService:
                 "error": error_msg,
             }
 
+        except TimeoutError:
+            error_msg = f"Agent processing timed out after {self.timeout_seconds}s"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "cost_usd": None,
+                "duration_ms": 0,
+                "error": error_msg,
+            }
         except Exception as e:
             logger.exception("Agent processing failed with exception")
             return {

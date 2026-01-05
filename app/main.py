@@ -88,6 +88,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         repo_url=settings.vault_repo_url,
         user_name=settings.git_user_name,
         user_email=settings.git_user_email,
+        timeout_seconds=settings.git_timeout_seconds,
     )
 
     inbox_service = InboxService()
@@ -98,6 +99,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         api_key=settings.anthropic_api_key,
         base_url=settings.anthropic_base_url,
         max_budget_usd=settings.agent_max_budget_usd,
+        timeout_seconds=settings.anthropic_timeout_seconds,
     )
 
     log_service = LogService(logs_dir=vault_service.logs_path(), vault_path=vault_service.vault_path)
@@ -146,6 +148,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 key_id=settings.apple_key_id,
                 bundle_id=settings.apple_bundle_id,
                 environment="production",  # Default to production
+                timeout_seconds=settings.apns_timeout_seconds,
             )
             logger.info("APNs service initialized successfully")
         except ValueError as e:
