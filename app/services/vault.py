@@ -32,7 +32,16 @@ class VaultService:
                     self._last_mtime = self._config_file_path.stat().st_mtime
                 logger.debug("Vault config reloaded from .prime/settings.yaml")
             except Exception as e:
-                logger.warning(f"Failed to reload vault config: {e}")
+                logger.warning(
+                    "Failed to reload vault config",
+                    extra={
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "config_file": str(self._config_file_path),
+                        "vault_path": str(self.vault_path),
+                    },
+                    exc_info=True,
+                )
                 # Fall through to return last valid config (or new default if none exists)
                 if self._vault_config is None:
                     self._vault_config = load_vault_config(self.vault_path)

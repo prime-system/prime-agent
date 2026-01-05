@@ -3,12 +3,14 @@ import logging
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 
 from app.dependencies import get_git_service, get_inbox_service, get_vault_service, verify_token
+from app.exceptions import InboxError, VaultError
 from app.models.capture import CaptureRequest, CaptureResponse
 from app.services.background_tasks import safe_background_task
 from app.services.git import GitService
 from app.services.inbox import InboxService
 from app.services.title_generator import TitleGenerator
 from app.services.vault import VaultService
+from app.utils.error_handling import format_exception_for_response
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -87,7 +89,7 @@ async def capture(
                 "size_bytes": len(content),
             },
         )
-    except OSError as e:
+    except (OSError, InboxError, VaultError) as e:
         logger.error(
             "Failed to write capture file",
             extra={
@@ -100,7 +102,24 @@ async def capture(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to save capture",
+            detail=format_exception_for_response(e),
+        ) from e
+    except Exception as e:
+        logger.exception(
+            "Unexpected error during capture",
+            extra={
+                "dump_id": dump_id,
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "path": str(inbox_file),
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "InternalServerError",
+                "message": "An unexpected error occurred while saving capture",
+            },
         ) from e
 
     # Queue git commit and push in background with error tracking

@@ -696,6 +696,151 @@ See `LOGGING_STANDARDS.md` for detailed guidelines and examples.
 
 Asyncio warning suppressed for Claude SDK task context issue (app/main.py:36-43).
 
+### Error Handling Standards
+
+**Critical: Always use specific exceptions with context for better debugging.**
+
+This codebase uses custom exception classes that include contextual information for improved observability and debugging. All custom exceptions inherit from `PrimeAgentError` and support attaching context dictionaries.
+
+**Rules:**
+
+1. **Catch Specific Exceptions:**
+   ```python
+   # ✅ CORRECT - Catch specific exception types
+   try:
+       git_service.push()
+   except GitError as e:
+       logger.error("Git push failed", extra=e.context, exc_info=True)
+       raise
+   except TimeoutError as e:
+       logger.error("Operation timed out", exc_info=True)
+       raise
+
+   # ❌ WRONG - Bare Exception without context
+   try:
+       git_service.push()
+   except Exception as e:
+       logger.error(f"Error: {e}")
+       raise
+   ```
+
+2. **Use Custom Exceptions with Context:**
+   ```python
+   from app.exceptions import GitError, VaultError, AgentError
+
+   # ✅ CORRECT - Include context dict
+   raise GitError(
+       "Failed to push changes",
+       context={
+           "operation": "push",
+           "remote": "origin",
+           "branch": "main",
+           "vault_path": str(vault_path),
+       }
+   )
+
+   # ❌ WRONG - No context
+   raise GitError("Failed to push changes")
+   ```
+
+3. **Log Errors with Structured Context:**
+   ```python
+   # ✅ CORRECT - Structured logging with extra dict
+   logger.error(
+       "Git push failed",
+       extra={
+           "operation": "push",
+           "error_type": type(e).__name__,
+           "vault_path": str(vault_path),
+       },
+       exc_info=True,
+   )
+
+   # ❌ WRONG - String formatting
+   logger.error(f"Git push failed: {e}")
+   ```
+
+4. **Chain Exceptions to Preserve Context:**
+   ```python
+   # ✅ CORRECT - Use 'from' to chain exceptions
+   try:
+       file_path.read_text()
+   except OSError as e:
+       raise VaultError(
+           "Failed to read config",
+           context={"path": str(file_path)},
+       ) from e
+
+   # ❌ WRONG - Lose original exception
+   try:
+       file_path.read_text()
+   except OSError:
+       raise VaultError("Failed to read config")
+   ```
+
+5. **Use Error Handling Utilities:**
+   ```python
+   from app.utils.error_handling import log_errors, format_exception_for_response
+
+   # Decorator for automatic error logging
+   @log_errors("git_push_operation")
+   async def push_changes() -> None:
+       git_service.push()
+
+   # Format exceptions for API responses
+   try:
+       do_something()
+   except GitError as e:
+       raise HTTPException(
+           status_code=500,
+           detail=format_exception_for_response(e)
+       )
+   ```
+
+**Available Custom Exceptions (app/exceptions.py):**
+
+- `PrimeAgentError` - Base class for all custom exceptions
+- `GitError` - Git operation failures (clone, pull, commit, push)
+- `VaultError` - Vault filesystem and configuration errors
+- `AgentError` - Claude Agent SDK processing errors
+- `ConfigurationError` - Configuration loading/validation errors
+- `ValidationError` - Input validation failures
+- `InboxError` - Inbox file operation errors
+- `TitleGenerationError` - Title generation API errors
+
+**When to Catch Broad Exceptions:**
+
+Only catch bare `Exception` when:
+1. You're at a top-level boundary (HTTP endpoint, background worker)
+2. You need to prevent crashes and log unexpected errors
+3. You MUST include full context in logging:
+
+```python
+# Acceptable at top-level boundary
+try:
+    process_capture()
+except GitError as e:
+    # Handle known error
+    logger.error("Git error", extra=e.context, exc_info=True)
+except VaultError as e:
+    # Handle known error
+    logger.error("Vault error", extra=e.context, exc_info=True)
+except Exception as e:
+    # Catch unexpected errors with full context
+    logger.exception(
+        "Unexpected error",
+        extra={
+            "operation": "process_capture",
+            "error_type": type(e).__name__,
+        },
+    )
+    raise
+```
+
+**Testing Exception Handling:**
+
+All custom exceptions and error utilities are tested in `tests/test_error_handling.py`.
+
 ### Concurrency Model: Pure Asyncio Only
 
 **Critical: NO mixing of threading primitives with async code.**

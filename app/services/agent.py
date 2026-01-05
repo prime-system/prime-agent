@@ -12,6 +12,7 @@ from typing import TypedDict
 
 from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
 
+from app.exceptions import AgentError
 from app.utils.frontmatter import (
     FrontmatterError,
     parse_and_validate_command,
@@ -28,10 +29,6 @@ class ProcessResult(TypedDict):
     cost_usd: float | None
     duration_ms: int | None
     error: str | None
-
-
-class AgentError(Exception):
-    """Agent processing error."""
 
 
 class AgentService:
@@ -102,7 +99,14 @@ class AgentService:
 
         if not template_path.exists():
             msg = f"processCapture template not found: {template_path}"
-            raise AgentError(msg)
+            raise AgentError(
+                msg,
+                context={
+                    "operation": "get_process_capture_prompt",
+                    "template_path": str(template_path),
+                    "vault_path": str(self.vault_path),
+                },
+            )
 
         command_content = template_path.read_text()
 

@@ -1,15 +1,13 @@
 import logging
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import git
 
+from app.exceptions import GitError
+
 logger = logging.getLogger(__name__)
-
-
-class GitError(Exception):
-    """Git operation failed."""
 
 
 class GitService:
@@ -57,7 +55,14 @@ class GitService:
 
         if not self.repo_url:
             msg = "Git enabled but VAULT_REPO_URL not configured"
-            raise GitError(msg)
+            raise GitError(
+                msg,
+                context={
+                    "operation": "initialize",
+                    "enabled": self.enabled,
+                    "vault_path": str(self.vault_path),
+                },
+            )
 
         git_dir = self.vault_path / ".git"
 
@@ -76,27 +81,33 @@ class GitService:
                     self.vault_path,
                     env={"GIT_TERMINAL_PROMPT": "0"},  # Prevent interactive prompts
                 )
-            except subprocess.TimeoutExpired:
+            except subprocess.TimeoutExpired as e:
                 msg = f"Git clone timed out after {self.timeout_seconds}s"
+                context = {
+                    "operation": "clone",
+                    "timeout_seconds": self.timeout_seconds,
+                    "repo_url": self.repo_url,
+                    "vault_path": str(self.vault_path),
+                }
                 logger.error(
                     "Git clone timed out",
-                    extra={
-                        "timeout_seconds": self.timeout_seconds,
-                        "repo_url": self.repo_url,
-                    },
+                    extra=context,
                 )
-                raise GitError(msg)
+                raise GitError(msg, context=context) from e
             except git.GitCommandError as e:
+                context = {
+                    "operation": "clone",
+                    "repo_url": self.repo_url,
+                    "vault_path": str(self.vault_path),
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                }
                 logger.error(
                     "Git clone failed",
-                    extra={
-                        "repo_url": self.repo_url,
-                        "error": str(e),
-                        "error_type": type(e).__name__,
-                    },
+                    extra=context,
                     exc_info=True,
                 )
-                raise GitError(str(e)) from e
+                raise GitError(f"Failed to clone repository: {e}", context=context) from e
         else:
             logger.info(
                 "Opening existing vault",
@@ -125,7 +136,14 @@ class GitService:
 
         if self._repo is None:
             msg = "Repository not initialized"
-            raise GitError(msg)
+            raise GitError(
+                msg,
+                context={
+                    "operation": "pull",
+                    "enabled": self.enabled,
+                    "vault_path": str(self.vault_path),
+                },
+            )
 
         try:
             origin = self._repo.remotes.origin
@@ -133,26 +151,31 @@ class GitService:
             with self._repo.git.custom_environment(GIT_TERMINAL_PROMPT="0"):
                 origin.pull()
             logger.debug("Git pull completed")
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as e:
             msg = f"Git pull timed out after {self.timeout_seconds}s"
+            context = {
+                "operation": "pull",
+                "timeout_seconds": self.timeout_seconds,
+                "vault_path": str(self.vault_path),
+            }
             logger.error(
                 "Git pull timed out",
-                extra={
-                    "timeout_seconds": self.timeout_seconds,
-                },
+                extra=context,
             )
-            raise GitError(msg)
+            raise GitError(msg, context=context) from e
         except git.GitCommandError as e:
+            context = {
+                "operation": "pull",
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "vault_path": str(self.vault_path),
+            }
             logger.error(
                 "Git pull failed",
-                extra={
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                },
+                extra=context,
                 exc_info=True,
             )
-            msg = f"Pull failed: {e}"
-            raise GitError(msg) from e
+            raise GitError(f"Pull failed: {e}", context=context) from e
 
     def get_changed_files(self) -> list[str]:
         """
@@ -209,7 +232,16 @@ class GitService:
 
         if self._repo is None:
             msg = "Repository not initialized"
-            raise GitError(msg)
+            raise GitError(
+                msg,
+                context={
+                    "operation": "commit",
+                    "enabled": self.enabled,
+                    "vault_path": str(self.vault_path),
+                    "message": message,
+                    "files_count": len(paths),
+                },
+            )
 
         try:
             # Stage specified files
@@ -226,18 +258,20 @@ class GitService:
             )
 
         except git.GitCommandError as e:
+            context = {
+                "operation": "commit",
+                "message": message,
+                "files_count": len(paths),
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "vault_path": str(self.vault_path),
+            }
             logger.error(
                 "Git commit failed",
-                extra={
-                    "message": message,
-                    "files_count": len(paths),
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                },
+                extra=context,
                 exc_info=True,
             )
-            msg = f"Commit failed: {e}"
-            raise GitError(msg) from e
+            raise GitError(f"Commit failed: {e}", context=context) from e
 
     def push(self) -> None:
         """
@@ -253,7 +287,14 @@ class GitService:
 
         if self._repo is None:
             msg = "Repository not initialized"
-            raise GitError(msg)
+            raise GitError(
+                msg,
+                context={
+                    "operation": "push",
+                    "enabled": self.enabled,
+                    "vault_path": str(self.vault_path),
+                },
+            )
 
         try:
             origin = self._repo.remotes.origin
@@ -261,26 +302,31 @@ class GitService:
             with self._repo.git.custom_environment(GIT_TERMINAL_PROMPT="0"):
                 origin.push()
             logger.debug("Git push completed")
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as e:
             msg = f"Git push timed out after {self.timeout_seconds}s"
+            context = {
+                "operation": "push",
+                "timeout_seconds": self.timeout_seconds,
+                "vault_path": str(self.vault_path),
+            }
             logger.error(
                 "Git push timed out",
-                extra={
-                    "timeout_seconds": self.timeout_seconds,
-                },
+                extra=context,
             )
-            raise GitError(msg)
+            raise GitError(msg, context=context) from e
         except git.GitCommandError as e:
+            context = {
+                "operation": "push",
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "vault_path": str(self.vault_path),
+            }
             logger.error(
                 "Git push failed",
-                extra={
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                },
+                extra=context,
                 exc_info=True,
             )
-            msg = f"Push failed: {e}"
-            raise GitError(msg) from e
+            raise GitError(f"Push failed: {e}", context=context) from e
 
     def commit_and_push(self, message: str, paths: list[str]) -> None:
         """
@@ -317,8 +363,13 @@ class GitService:
 
         if self._repo is None:
             msg = "Repository not initialized - cannot auto-commit"
-            logger.error("Repository not initialized")
-            raise GitError(msg)
+            context = {
+                "operation": "auto_commit_and_push",
+                "enabled": self.enabled,
+                "vault_path": str(self.vault_path),
+            }
+            logger.error("Repository not initialized", extra=context)
+            raise GitError(msg, context=context)
 
         try:
             # Check if there are any changes
@@ -335,7 +386,7 @@ class GitService:
             )
 
             # Create commit message with timestamp
-            timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+            timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
             message = f"Agent: Auto-commit at {timestamp}"
 
             # Commit and push all changed files
@@ -361,12 +412,15 @@ class GitService:
             raise
         except Exception as e:
             error_msg = f"Unexpected error during auto-commit: {e}"
+            context = {
+                "operation": "auto_commit_and_push",
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "vault_path": str(self.vault_path),
+            }
             logger.error(
                 "Unexpected error during auto-commit",
-                extra={
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                },
+                extra=context,
                 exc_info=True,
             )
-            raise GitError(error_msg) from e
+            raise GitError(error_msg, context=context) from e

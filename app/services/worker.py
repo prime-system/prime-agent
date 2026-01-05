@@ -8,7 +8,6 @@ in the background, ensuring only one processing run happens at a time.
 import asyncio
 import logging
 import time
-from pathlib import Path
 from typing import Optional
 
 from app.services.agent import AgentService
@@ -225,10 +224,17 @@ class AgentWorker:
                     )
 
         except Exception as e:
-            logger.exception("Worker processing failed with unexpected exception")
+            duration_seconds = time.time() - start_time
+            logger.exception(
+                "Worker processing failed with unexpected exception",
+                extra={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "duration_seconds": round(duration_seconds, 2),
+                },
+            )
             # Try to create error log if possible
             try:
-                duration_seconds = time.time() - start_time
                 log_file = self.log_service.create_run_log(
                     duration_seconds=duration_seconds,
                     error=f"Unexpected exception: {e!s}",
@@ -243,8 +249,14 @@ class AgentWorker:
                             )
                         except GitError:
                             pass  # Best effort
-            except Exception:
-                logger.exception("Failed to create error log")
+            except Exception as log_error:
+                logger.exception(
+                    "Failed to create error log",
+                    extra={
+                        "error": str(log_error),
+                        "error_type": type(log_error).__name__,
+                    },
+                )
 
         finally:
             # Always clear processing flag
