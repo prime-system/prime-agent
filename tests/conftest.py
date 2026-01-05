@@ -8,6 +8,18 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 
+@pytest.fixture(autouse=True)
+async def reset_vault_lock_after_test():
+    """Reset vault lock after each test to prevent state leakage.
+
+    This fixture ensures each test starts with a clean lock state.
+    Without this, tests could interfere with each other.
+    """
+    yield
+    from app.services.lock import reset_lock_for_testing
+    await reset_lock_for_testing()
+
+
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_env():
     """Set up test environment variables before importing app modules."""

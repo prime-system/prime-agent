@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import capture, chat, claude_sessions, config, files, git, processing, push
 from app.config import settings
 from app.services.agent import AgentService
+from app.services.lock import init_vault_lock
 from app.services.agent_chat import AgentChatService
 from app.services.agent_session_manager import AgentSessionManager
 from app.services.apn_service import APNService
@@ -71,6 +72,9 @@ async def periodic_git_pull(git_service: GitService, interval_seconds: int = 300
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application startup and shutdown."""
     logger.info("Starting Prime server...")
+
+    # Initialize vault lock in the running event loop (MUST be first!)
+    await init_vault_lock()
 
     # Initialize services
     vault_service = VaultService(settings.vault_path)

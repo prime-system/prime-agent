@@ -13,7 +13,7 @@ from typing import Optional
 
 from app.services.agent import AgentService
 from app.services.git import GitError, GitService
-from app.services.lock import vault_lock
+from app.services.lock import get_vault_lock
 from app.services.logs import LogService
 
 logger = logging.getLogger(__name__)
@@ -132,6 +132,7 @@ class AgentWorker:
         logger.info("Starting agent processing")
 
         try:
+            vault_lock = get_vault_lock()
             async with vault_lock:
                 logger.debug("Acquired vault lock")
 
