@@ -124,7 +124,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.info(f"APNs devices file: {settings.apn_devices_file}")
 
             # Initialize APNService
-            logger.info(f"APNs credentials - team_id: {settings.apple_team_id}, key_id: {settings.apple_key_id}, bundle_id: {settings.apple_bundle_id}")
+            logger.debug("APNs service configuration loaded (credentials not logged for security)")
 
             apn_service = APNService(
                 devices_file=settings.apn_devices_file,
@@ -137,7 +137,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.info("APNs service initialized successfully")
         except ValueError as e:
             logger.error(f"Failed to initialize APNs service: {e}")
-            logger.error(f"APNs config - enabled: {settings.apn_enabled}, team_id: {settings.apple_team_id}, key_id: {settings.apple_key_id}, bundle_id: {settings.apple_bundle_id}")
             # Continue without APNs if initialization fails
             apn_service = None
     else:

@@ -352,6 +352,67 @@ logger.exception("Exceptions with traceback")
 
 Asyncio warning suppressed for Claude SDK task context issue (app/main.py:30-39).
 
+### Security Best Practices: Credential Handling
+
+**Critical: Never log credentials in any form.** Exposed credentials in Docker logs, CI/CD pipelines, and log aggregation systems pose significant security risks (CWE-532, PCI-DSS violation).
+
+**What NEVER to log:**
+- API keys or tokens (e.g., `ANTHROPIC_API_KEY`, `AUTH_TOKEN`)
+- Credential identifiers (team IDs, key IDs) - even metadata can reveal infrastructure
+- Partial credentials (first 50 chars of keys)
+- Credential lengths (hints at key size)
+- PEM-formatted private keys (SSH keys, p8 keys)
+- Database passwords or connection strings
+
+**What IS safe to log:**
+- Non-secret identifiers: bundle IDs (`com.example.app`), usernames, email addresses
+- Operation status: "APNs service initialized successfully"
+- Path information: directory locations, file paths
+- Non-credential configuration: feature flags, environment names
+
+**Examples:**
+
+❌ BAD:
+```python
+logger.info(f"APNs credentials - team_id: {settings.apple_team_id}, key_id: {settings.apple_key_id}")
+print(f"API key: {api_key[:50]}...")  # Partial key exposed!
+logger.error(f"Git auth failed: {GIT_SSH_KEY}")  # Full key in error log!
+```
+
+✅ GOOD:
+```python
+logger.debug("APNs service configured: bundle_id=%s", settings.apple_bundle_id)
+logger.info("APNs service initialized successfully")  # No details needed
+logger.error("Git authentication failed (credentials invalid)")  # Generic message
+```
+
+**Redaction Utility:**
+The `app/utils/redaction.py` module provides utilities to safely redact credentials:
+
+```python
+from app.utils.redaction import redact_dict, redact_sensitive_data
+
+# Redact dictionary keys by pattern
+config = {"api_key": "sk-ant-...", "bundle_id": "com.example.app"}
+safe_config = redact_dict(config)
+# Result: {"api_key": "[REDACTED]", "bundle_id": "com.example.app"}
+
+# Redact text strings by regex pattern
+text = "Key: sk-ant-abc123def456"
+safe_text = redact_sensitive_data(text)
+# Result: "Key: [REDACTED_api_key]"
+```
+
+**Pre-commit Verification:**
+Before committing code, verify no credentials are logged:
+
+```bash
+# Search for dangerous logging patterns
+grep -r "api_key\|auth_token\|p8_key\|password\|secret" app/ --include="*.py" | grep -E "print|logger"
+
+# Should return EMPTY if safe. Non-empty results need fixing.
+```
+
 ## Common Development Tasks
 
 ### Adding a New API Endpoint

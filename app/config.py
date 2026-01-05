@@ -231,20 +231,12 @@ def _build_settings_from_yaml() -> Settings:
             p8_key = p8_key.encode().decode("unicode_escape")
         flat_config["apple_p8_key"] = p8_key
 
-        # Debug logging for APNs configuration
+        # APNs configuration validation
         if flat_config["apn_enabled"]:
-            print(f"[DEBUG] APNs enabled: {flat_config['apn_enabled']}")
-            print(f"[DEBUG] APNs team_id: {flat_config['apple_team_id']}")
-            print(f"[DEBUG] APNs bundle_id: {flat_config['apple_bundle_id']}")
-            print(f"[DEBUG] APNs key_id: {flat_config['apple_key_id']}")
-            p8_preview = (
-                (flat_config["apple_p8_key"][:50] + "...")
-                if flat_config["apple_p8_key"]
-                else "EMPTY"
+            logger.debug(
+                "APNs service configured: bundle_id=%s",
+                flat_config["apple_bundle_id"],
             )
-            print(f"[DEBUG] APNs p8_key: {p8_preview}")
-            p8_len = len(flat_config["apple_p8_key"]) if flat_config["apple_p8_key"] else 0
-            print(f"[DEBUG] APNs p8_key length: {p8_len} chars")
 
     # Data directory
     if "storage" in config_dict and isinstance(config_dict["storage"], dict):
