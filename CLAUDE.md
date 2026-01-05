@@ -286,6 +286,57 @@ The system uses **Claude Agent SDK** (`claude_agent_sdk`) for autonomous process
 - Fire-and-forget trigger pattern
 - Automatically cleared even on exceptions
 
+### Background Task Error Tracking
+
+**Problem:** Background tasks (like git auto-commit after capture) can fail silently:
+- Git auth failure → Commit never happens → Vault out of sync
+- Network error → Push fails → No backup of capture
+- Users receive `200 OK` response even if commit failed → Data loss scenario
+
+**Solution:** All background tasks must use `safe_background_task()` wrapper:
+
+```python
+from app.services.background_tasks import safe_background_task
+
+# BEFORE (dangerous - errors silently ignored)
+background_tasks.add_task(git_service.auto_commit_and_push)
+
+# AFTER (safe - errors logged and tracked)
+background_tasks.add_task(
+    safe_background_task,
+    "git_auto_commit",  # Task name for logging
+    git_service.auto_commit_and_push  # Callable to execute
+)
+```
+
+**Monitoring Task Status:**
+```bash
+# Check background task health (requires AUTH_TOKEN)
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  http://localhost:8000/api/monitoring/background-tasks/status
+
+# Response:
+{
+    "successful_tasks": 42,
+    "failed_tasks": 2,
+    "recent_failures": [
+        {
+            "task": "git_auto_commit",
+            "error": "Push failed: authentication error",
+            "type": "GitError",
+            "timestamp": "2026-01-02T14:30:45.123456"
+        }
+    ]
+}
+```
+
+**Implementation Details:**
+- `BackgroundTaskTracker` maintains history of successes/failures
+- All exceptions are logged with full context (traceback included)
+- Failed tasks are accessible via monitoring endpoint for alerting
+- Last 5 failures always available (configurable history size)
+- Thread-safe for concurrent task execution
+
 ### Git Integration
 
 **Three Git Operations:**

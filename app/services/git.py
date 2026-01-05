@@ -188,20 +188,25 @@ class GitService:
         Auto-commit all changes and push (if Git is enabled).
 
         Creates a commit with timestamp for all changed files.
-        Non-blocking on errors (returns False instead of raising).
+        Called as background task after capture. Errors are logged but
+        don't block the capture response.
 
         Returns:
             True if commit+push succeeded or git disabled, False on error
 
         Local-only: Returns True (no-op)
+
+        Raises:
+            GitError: On git operation failures (caller should log)
         """
         if not self.enabled:
             logger.debug("Git disabled - skipping auto-commit")
             return True
 
         if self._repo is None:
-            logger.warning("Repository not initialized - skipping auto-commit")
-            return False
+            msg = "Repository not initialized - cannot auto-commit"
+            logger.error(msg)
+            raise GitError(msg)
 
         try:
             # Check if there are any changes
@@ -210,18 +215,21 @@ class GitService:
                 logger.debug("No changes to auto-commit")
                 return True
 
+            logger.debug(f"Auto-committing {len(changed_files)} files")
+
             # Create commit message with timestamp
             timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
             message = f"Agent: Auto-commit at {timestamp}"
 
             # Commit and push all changed files
             self.commit_and_push(message, changed_files)
-            logger.info(f"✓ Auto-committed {len(changed_files)} files")
+            logger.info(f"Auto-committed {len(changed_files)} files: {changed_files}")
             return True
 
         except GitError as e:
-            logger.warning(f"Auto-commit failed (non-blocking): {e}")
-            return False
+            logger.error(f"Auto-commit failed: {e}", exc_info=True)
+            raise
         except Exception as e:
-            logger.exception("Unexpected error during auto-commit")
-            return False
+            error_msg = f"Unexpected error during auto-commit: {e}"
+            logger.error(error_msg, exc_info=True)
+            raise GitError(error_msg) from e

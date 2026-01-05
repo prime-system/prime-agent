@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import capture, chat, claude_sessions, config, files, git, processing, push
+from app.api import capture, chat, claude_sessions, config, files, git, monitoring, processing, push
 from app.config import settings
 from app.services.agent import AgentService
 from app.services.lock import init_vault_lock
@@ -244,6 +244,7 @@ app.include_router(claude_sessions.router)
 app.include_router(config.router)
 app.include_router(files.router, tags=["files"])
 app.include_router(git.router, tags=["git"])
+app.include_router(monitoring.router, tags=["monitoring"])
 app.include_router(processing.router)
 app.include_router(push.router, prefix="/api/v1", tags=["push"])
 

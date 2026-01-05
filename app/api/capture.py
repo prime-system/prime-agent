@@ -4,6 +4,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 
 from app.dependencies import verify_token
 from app.models.capture import CaptureRequest, CaptureResponse
+from app.services.background_tasks import safe_background_task
 from app.services.git import GitService
 from app.services.inbox import InboxService
 from app.services.title_generator import TitleGenerator
@@ -82,8 +83,12 @@ async def capture(
             detail="Failed to save capture",
         ) from e
 
-    # Queue git commit and push in background (errors ignored)
-    background_tasks.add_task(git_service.auto_commit_and_push)
+    # Queue git commit and push in background with error tracking
+    background_tasks.add_task(
+        safe_background_task,
+        "git_auto_commit",
+        git_service.auto_commit_and_push,
+    )
 
     return CaptureResponse(
         ok=True,
