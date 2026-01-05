@@ -103,7 +103,7 @@ class ConfigManager:
 
             # Create Settings object
             try:
-                new_settings = Settings(**flat_config)  # type: ignore[arg-type]
+                new_settings = Settings(**flat_config)
             except ValidationError as e:
                 msg = f"Configuration validation error: {e}"
                 if self._current_settings is None:

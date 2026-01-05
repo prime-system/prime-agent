@@ -7,6 +7,25 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+# Set up minimal test environment BEFORE any imports from app
+# This must happen before pytest collects tests
+_tmp_dir = tempfile.TemporaryDirectory(prefix="pytest_config_")
+_config_file = Path(_tmp_dir.name) / "config.yaml"
+_config_file.write_text(
+    """
+vault:
+  path: /tmp/test-vault
+
+auth:
+  token: test-token-123
+
+anthropic:
+  api_key: sk-ant-test
+  model: claude-3-5-sonnet-20241022
+"""
+)
+os.environ["CONFIG_PATH"] = str(_config_file)
+
 
 @pytest.fixture(autouse=True)
 async def reset_vault_lock_after_test():
@@ -21,13 +40,31 @@ async def reset_vault_lock_after_test():
 
 
 @pytest.fixture(scope="session", autouse=True)
-def setup_test_env():
+def setup_test_env(tmp_path_factory):
     """Set up test environment variables before importing app modules."""
     os.environ.setdefault("VAULT_REPO_URL", "git@github.com:test/vault.git")
     os.environ.setdefault("AUTH_TOKEN", "test-token-123")
     os.environ.setdefault("ANTHROPIC_API_KEY", "test-api-key-123")
     os.environ.setdefault("AGENT_MODEL", "claude-3-5-sonnet-20241022")
     os.environ.setdefault("VAULT_PATH", "/tmp/test-vault")
+
+    # Create a minimal test config file for ConfigManager initialization
+    tmp_path = tmp_path_factory.mktemp("config")
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+vault:
+  path: /tmp/test-vault
+
+auth:
+  token: test-token-123
+
+anthropic:
+  api_key: sk-ant-test
+  model: claude-3-5-sonnet-20241022
+"""
+    )
+    os.environ.setdefault("CONFIG_PATH", str(config_file))
 
 
 @pytest.fixture

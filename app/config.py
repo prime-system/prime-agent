@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import logging
 import os
 import re
 from pathlib import Path
 
 import yaml
-from pydantic import Field, ValidationError
+from pydantic import Field, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 def expand_env_vars(config_str: str) -> str:
@@ -187,8 +190,27 @@ class Settings(BaseSettings):
     # Data directory for persistent storage
     data_path: str = "/data"  # Persistent data storage (not vault-managed)
 
+    @field_validator("vault_repo_url", mode="after")
+    @classmethod
+    def validate_vault_repo_url(cls, v: str | None, info) -> str | None:
+        """Validate that git.repo_url is set when git.enabled=true."""
+        if info.data.get("git_enabled") and not v:
+            msg = "git.enabled=true requires git.repo_url to be set in config.yaml"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("apple_team_id", "apple_bundle_id", "apple_key_id", "apple_p8_key", mode="after")
+    @classmethod
+    def validate_apn_fields(cls, v: str | None, info) -> str | None:
+        """Validate that all APNs fields are set when apn.enabled=true."""
+        if info.data.get("apn_enabled") and not v:
+            field_name = info.field_name
+            msg = f"apn.enabled=true requires {field_name} to be set in config.yaml"
+            raise ValueError(msg)
+        return v
+
     def validate_git_config(self) -> None:
-        """Validate Git configuration consistency."""
+        """Validate Git configuration consistency (called explicitly after creation)."""
         if self.git_enabled and not self.vault_repo_url:
             msg = "git.enabled=true requires git.repo_url to be set in config.yaml"
             raise ValueError(msg)
@@ -220,7 +242,7 @@ class Settings(BaseSettings):
                     raise ValueError(msg)
 
     def validate_apn_config(self) -> None:
-        """Validate APNs configuration consistency."""
+        """Validate APNs configuration consistency (called explicitly after creation)."""
         if not self.apn_enabled:
             return  # APNs not required if disabled
 
@@ -345,7 +367,7 @@ def _build_settings_from_yaml() -> Settings:
 
     # Create Settings object
     try:
-        settings_obj = Settings(**flat_config)  # type: ignore[arg-type]
+        settings_obj = Settings(**flat_config)
         # Validate CORS configuration
         settings_obj.validate_cors_config()
         return settings_obj

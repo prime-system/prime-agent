@@ -130,12 +130,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # Initialize APNService
             logger.debug("APNs service configuration loaded (credentials not logged for security)")
 
+            # Type guard: When apn_enabled=true, validators ensure these are non-None strings
+            assert settings.apple_p8_key is not None
+            assert settings.apple_team_id is not None
+            assert settings.apple_key_id is not None
+            assert settings.apple_bundle_id is not None
+
             apn_service = APNService(
                 devices_file=settings.apn_devices_file,
-                key_content=settings.apple_p8_key,  # type: ignore[arg-type]
-                team_id=settings.apple_team_id,  # type: ignore[arg-type]
-                key_id=settings.apple_key_id,  # type: ignore[arg-type]
-                bundle_id=settings.apple_bundle_id,  # type: ignore[arg-type]
+                key_content=settings.apple_p8_key,
+                team_id=settings.apple_team_id,
+                key_id=settings.apple_key_id,
+                bundle_id=settings.apple_bundle_id,
                 environment="production",  # Default to production
             )
             logger.info("APNs service initialized successfully")

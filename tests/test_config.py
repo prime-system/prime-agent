@@ -481,7 +481,8 @@ logging:
         os.environ["APPLE_TEAM_ID"] = "XXXXXXXXXX"
         os.environ["APPLE_BUNDLE_ID"] = "com.example.primeapp"
         os.environ["APPLE_KEY_ID"] = "YYYYYYYYYY"
-        os.environ["APPLE_P8_KEY"] = "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEH\n-----END PRIVATE KEY-----"
+        # Store P8 key with escaped newlines for proper YAML parsing
+        os.environ["APPLE_P8_KEY"] = "-----BEGIN PRIVATE KEY-----\\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEH\\n-----END PRIVATE KEY-----"
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config_path = Path(tmpdir) / "config.yaml"
@@ -505,7 +506,7 @@ apn:
   team_id: ${APPLE_TEAM_ID}
   bundle_id: ${APPLE_BUNDLE_ID}
   key_id: ${APPLE_KEY_ID}
-  p8_key: ${APPLE_P8_KEY}
+  p8_key: "${APPLE_P8_KEY}"
 """
             )
 
@@ -552,6 +553,8 @@ apn:
 
     def test_apn_validation_fails_when_enabled_missing_team_id(self) -> None:
         """Test that APNs validation fails when enabled but missing team_id."""
+        from pydantic import ValidationError
+
         os.environ["ANTHROPIC_API_KEY"] = "sk-ant-test"
         os.environ["AUTH_TOKEN"] = "test-token"
         os.environ["APPLE_BUNDLE_ID"] = "com.example.primeapp"
@@ -584,13 +587,16 @@ apn:
             )
 
             os.environ["CONFIG_PATH"] = str(config_path)
-            settings = _build_settings_from_yaml()
+            # Validation now happens at Settings creation time with field validators
+            with pytest.raises(ValidationError) as exc_info:
+                _build_settings_from_yaml()
 
-            with pytest.raises(ValueError, match=r"apn\.team_id"):
-                settings.validate_apn_config()
+            assert "apple_team_id" in str(exc_info.value)
 
     def test_apn_validation_fails_when_enabled_missing_all_credentials(self) -> None:
         """Test that APNs validation fails when enabled but all credentials missing."""
+        from pydantic import ValidationError
+
         os.environ["ANTHROPIC_API_KEY"] = "sk-ant-test"
         os.environ["AUTH_TOKEN"] = "test-token"
 
@@ -617,7 +623,10 @@ apn:
             )
 
             os.environ["CONFIG_PATH"] = str(config_path)
-            settings = _build_settings_from_yaml()
+            # Validation now happens at Settings creation time with field validators
+            with pytest.raises(ValidationError) as exc_info:
+                _build_settings_from_yaml()
 
-            with pytest.raises(ValueError, match="apn"):
-                settings.validate_apn_config()
+            # Verify that at least one APNs field failed validation
+            error_str = str(exc_info.value)
+            assert any(field in error_str for field in ["apple_team_id", "apple_bundle_id", "apple_key_id", "apple_p8_key"])

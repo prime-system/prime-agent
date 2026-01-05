@@ -1,6 +1,7 @@
 """Push notifications API endpoints."""
 
 import logging
+from typing import TYPE_CHECKING, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -171,9 +172,15 @@ async def list_devices(
         )
 
     try:
+        # Validate environment is one of the allowed values
+        if environment is not None and environment not in ("development", "production"):
+            logger.warning("Invalid environment filter: %s, ignoring", environment)
+            environment = None
+
+        # After validation, environment is either None or one of the allowed values
         devices = apn_service.list_devices(
             device_filter=device_filter,
-            environment_filter=environment,  # type: ignore[arg-type]
+            environment_filter=cast(Literal["development", "production"] | None, environment),
         )
 
         return DeviceListResponse(
