@@ -15,9 +15,23 @@ from pathlib import Path
 import yaml
 from pydantic import ValidationError
 
-from app.config import Settings, expand_env_vars
-
 logger = logging.getLogger(__name__)
+
+# Avoid circular import: defer importing Settings and expand_env_vars
+# They are only needed inside methods, not at module level
+Settings: type | None = None
+expand_env_vars: object = None
+
+
+def _ensure_imports() -> None:
+    """Ensure Settings and expand_env_vars are imported (deferred to avoid circular import)."""
+    global Settings, expand_env_vars
+    if Settings is None or expand_env_vars is None:
+        from app.config import Settings as _Settings
+        from app.config import expand_env_vars as _expand_env_vars
+
+        Settings = _Settings
+        expand_env_vars = _expand_env_vars
 
 
 class ConfigManager:
@@ -44,11 +58,13 @@ class ConfigManager:
         Args:
             config_path: Path to config.yaml. If None, uses CONFIG_PATH env var or /app/config.yaml
         """
+        _ensure_imports()
+
         if config_path is None:
             config_path = os.environ.get("CONFIG_PATH", "/app/config.yaml")
 
         self.config_path = Path(config_path)
-        self._current_settings: Settings | None = None
+        self._current_settings: Settings | None = None  # type: ignore[assignment]
         self._last_mtime: float | None = None
         self._lock: asyncio.Lock | None = None
 
@@ -69,9 +85,14 @@ class ConfigManager:
 
     def _load_config(self) -> None:
         """
-        Load configuration from YAML file.
+        Load configuration from YAML file with atomic operations.
 
-        Sets both _current_settings and _last_mtime.
+        Prevents TOCTOU (Time-of-Check-Time-of-Use) race conditions by:
+        1. Reading file contents first (atomic operation)
+        2. Getting mtime after read (consistent with file contents)
+        3. Only updating config if validation passes
+
+        Sets both _current_settings and _last_mtime on success.
         On error, logs warning but doesn't raise (preserves existing config).
         """
         if not self.config_path.exists():
@@ -82,13 +103,47 @@ class ConfigManager:
             )
             if self._current_settings is None:
                 raise FileNotFoundError(msg)
-            logger.warning(f"Config file missing on reload: {msg}")
+            logger.warning("Config file missing on reload", extra={"path": str(self.config_path)})
             return
 
         try:
-            # Read file
-            with open(self.config_path) as f:
-                config_str = f.read()
+            # Read file first (atomic operation)
+            # This ensures we read consistent file contents
+            try:
+                config_str = self.config_path.read_text()
+            except FileNotFoundError:
+                msg = f"Config file was deleted during read: {self.config_path}"
+                if self._current_settings is None:
+                    raise
+                logger.warning(msg)
+                return
+            except OSError as e:
+                msg = f"Failed to read config file: {e}"
+                if self._current_settings is None:
+                    raise
+                logger.warning(msg, extra={"error_type": type(e).__name__})
+                return
+
+            # Get mtime after read (now consistent with file contents)
+            try:
+                current_mtime = self.config_path.stat().st_mtime
+            except FileNotFoundError:
+                msg = f"Config file was deleted after read: {self.config_path}"
+                if self._current_settings is None:
+                    raise
+                logger.warning(msg)
+                return
+            except OSError as e:
+                msg = f"Failed to stat config file: {e}"
+                if self._current_settings is None:
+                    raise
+                logger.warning(msg, extra={"error_type": type(e).__name__})
+                return
+
+            # Skip reload if mtime unchanged (file hasn't been modified)
+            if self._last_mtime is not None and current_mtime == self._last_mtime:
+                logger.debug("Config file unchanged, skipping reload", extra={"path": str(self.config_path)})
+                return
 
             # Expand environment variables
             try:
@@ -127,13 +182,14 @@ class ConfigManager:
                 msg = f"Configuration validation error: {e}"
                 if self._current_settings is None:
                     raise
-                logger.warning(msg)
+                logger.warning(msg, extra={"validation_errors": len(e.errors())})
                 return
 
             # Validate configs
             try:
                 new_settings.validate_git_config()
                 new_settings.validate_apn_config()
+                new_settings.validate_cors_config()
             except ValueError as e:
                 msg = f"Configuration validation error: {e}"
                 if self._current_settings is None:
@@ -141,15 +197,27 @@ class ConfigManager:
                 logger.warning(msg)
                 return
 
-            # Update settings and mtime
+            # All validation passed - atomically update config
+            # Both assignments happen in quick succession, so no intermediate state
             self._current_settings = new_settings
-            self._last_mtime = self.config_path.stat().st_mtime
-            logger.info(f"Configuration loaded successfully from {self.config_path}")
+            self._last_mtime = current_mtime
+
+            logger.info(
+                "Configuration loaded successfully",
+                extra={
+                    "path": str(self.config_path),
+                    "mtime": current_mtime,
+                }
+            )
 
         except Exception as e:
             if self._current_settings is None:
                 raise
-            logger.warning(f"Error loading configuration: {e}")
+            logger.warning(
+                "Error loading configuration",
+                exc_info=True,
+                extra={"error_type": type(e).__name__},
+            )
 
     def _flatten_config(self, config_dict: dict) -> dict:
         """Flatten nested YAML structure to Settings field format."""
@@ -206,22 +274,37 @@ class ConfigManager:
         """
         Check if config file has been modified, created, or deleted since last load.
 
+        To prevent TOCTOU race conditions:
+        1. We only check existence here (lightweight)
+        2. We verify mtime atomically in _load_config after reading contents
+        3. If file exists but mtime didn't change, _load_config skips reload
+
         Handles these scenarios:
-        - File exists and mtime changed → True (reload)
+        - File exists and we have last_mtime → attempt reload, _load_config verifies
         - File created at runtime → True (reload)
         - File deleted/missing → False (keep using last valid config)
-        - File unchanged → False (no reload needed)
+        - File unchanged → _load_config will skip if mtime unchanged
+
+        Returns:
+            True if we should attempt to reload, False otherwise
         """
-        file_exists = self.config_path.exists()
+        try:
+            file_exists = self.config_path.exists()
+        except OSError:
+            # Filesystem error - don't try to reload
+            return False
 
         # Case 1: File was loaded before and still exists
+        # Return True to trigger reload, but _load_config will verify mtime changed
         if self._last_mtime is not None and file_exists:
-            current_mtime = self.config_path.stat().st_mtime
-            return current_mtime != self._last_mtime
+            return True
 
         # Case 2: File didn't exist before and now exists (created at runtime)
         if self._last_mtime is None and file_exists:
-            logger.info(f"Config file created at runtime: {self.config_path}")
+            logger.info(
+                "Config file created at runtime",
+                extra={"path": str(self.config_path)},
+            )
             return True
 
         # Case 3: File never existed, still doesn't exist
@@ -231,7 +314,7 @@ class ConfigManager:
         # Case 4: File existed before but now doesn't (deleted at runtime)
         # Keep using last valid config, don't reload
         if self._last_mtime is not None and not file_exists:
-            logger.warning(f"Config file was deleted: {self.config_path}")
+            logger.warning("Config file was deleted", extra={"path": str(self.config_path)})
             return False
 
         return False

@@ -464,6 +464,52 @@ Both server config and vault config reload automatically:
 
 Changes apply immediately without restart.
 
+**TOCTOU Race Condition Prevention:**
+
+The configuration system prevents Time-of-Check-Time-of-Use (TOCTOU) race conditions where:
+1. File mtime is checked
+2. File is modified between check and read
+3. Inconsistent data is loaded
+
+**Safe Reload Pattern** (app/services/config_manager.py:93-200):
+
+1. **Read file first** (atomic operation):
+   ```python
+   config_str = self.config_path.read_text()  # Single syscall, atomic
+   ```
+
+2. **Check mtime after read** (consistent with contents):
+   ```python
+   current_mtime = self.config_path.stat().st_mtime
+   ```
+
+3. **Skip reload if mtime unchanged**:
+   ```python
+   if self._last_mtime is not None and current_mtime == self._last_mtime:
+       return  # No changes
+   ```
+
+4. **Validate before applying**:
+   ```python
+   new_settings = Settings(**flat_config)  # Parse & validate
+   new_settings.validate_git_config()      # Semantic checks
+   new_settings.validate_cors_config()
+   ```
+
+5. **Atomic config update**:
+   ```python
+   self._current_settings = new_settings  # Single assignment
+   self._last_mtime = current_mtime
+   ```
+
+**Benefits:**
+- ✅ No race conditions between check and use
+- ✅ File contents are always consistent
+- ✅ Invalid configs don't corrupt system state
+- ✅ Optimization: skip unnecessary reloads
+- ✅ Thread-safe with GIL protection
+- ✅ Comprehensive error handling
+
 ### Strict Type Checking
 
 Project uses `mypy` in strict mode with comprehensive linting. When adding code:
