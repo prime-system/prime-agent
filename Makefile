@@ -1,4 +1,4 @@
-.PHONY: help lint format type-check test clean install-dev pre-commit-install dev dev-build dev-down dev-logs dev-shell update-lock
+.PHONY: help lint format type-check test test-cov coverage-report coverage-check clean install-dev pre-commit-install dev dev-build dev-down dev-logs dev-shell update-lock
 
 help:
 	@echo "Available commands:"
@@ -18,6 +18,9 @@ help:
 	@echo "  make format             Format code with ruff"
 	@echo "  make type-check         Run mypy type checker"
 	@echo "  make test               Run pytest"
+	@echo "  make test-cov           Run pytest with coverage report"
+	@echo "  make coverage-report    Generate HTML coverage report"
+	@echo "  make coverage-check     Check coverage meets 80%% threshold"
 	@echo "  make check              Run all checks (lint + type-check + test)"
 	@echo "  make update-lock        Update uv.lock with latest compatible versions"
 	@echo "  make clean              Remove cache files"
@@ -48,13 +51,23 @@ type-check:
 test:
 	uv run pytest
 
+test-cov:
+	uv run pytest --cov=app --cov-report=html --cov-report=term
+
+coverage-report:
+	uv run pytest --cov=app --cov-report=html
+	@echo "Coverage report generated in htmlcov/index.html"
+
+coverage-check:
+	uv run pytest --cov=app --cov-report=term --cov-fail-under=80
+
 check: lint type-check test
 
 update-lock:
 	uv lock --upgrade
 
 clean:
-	rm -rf .pytest_cache .mypy_cache .ruff_cache __pycache__
+	rm -rf .pytest_cache .mypy_cache .ruff_cache __pycache__ .coverage htmlcov
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 

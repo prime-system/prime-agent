@@ -126,12 +126,84 @@ uv run mypy app tests
 ```bash
 # Using Makefile
 make test             # Run all tests
+make test-cov         # Run tests with coverage report
+make coverage-report  # Generate HTML coverage report
+make coverage-check   # Check coverage meets 80% threshold
 
 # Direct pytest commands (via uv run)
 uv run pytest                                    # Run all tests
 uv run pytest --cov=app --cov-report=html       # With coverage
 uv run pytest tests/test_vault.py -v            # Specific test file
 uv run pytest tests/test_vault.py::test_name -v # Single test
+```
+
+#### Test Coverage
+
+The project enforces a minimum of 80% test coverage to ensure code quality.
+
+**Coverage Requirements:**
+- Minimum 80% overall coverage (enforced in CI)
+- Critical paths (capture, git, agent) should have near 100% coverage
+- All new features must include tests
+
+**Running Coverage:**
+```bash
+# Generate coverage report (HTML + terminal output)
+make test-cov
+
+# View detailed HTML report
+open htmlcov/index.html
+
+# Check if coverage meets 80% threshold
+make coverage-check
+```
+
+**Coverage Configuration:**
+
+Coverage settings are defined in `pyproject.toml`:
+
+```toml
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "app/__init__.py",
+    "app/main.py",
+    "*/tests/*",
+    "**/test_*.py",
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+fail_under = 80
+```
+
+**Excluded from Coverage:**
+- `app/__init__.py` - Package initialization
+- `app/main.py` - FastAPI app entry point
+- Test files themselves
+
+**Coverage Reports:**
+- `.coverage` - Raw coverage data (binary)
+- `htmlcov/` - HTML coverage report
+- Terminal output shows summary with missing lines
+
+**Adding Tests:**
+When adding new code:
+1. Write tests first (TDD recommended)
+2. Run `make test-cov` to verify coverage
+3. Ensure no critical paths are uncovered
+4. Review HTML report for missing lines
+
+**Example Coverage Output:**
+```
+Name                              Stmts   Miss  Cover
+-----------------------------------------------------
+app/api/capture.py                   45      5    89%
+app/services/agent.py               120     15    88%
+app/services/vault.py                67      3    96%
+-----------------------------------------------------
+TOTAL                              1234    156    87%
 ```
 
 ### Docker Volume Management
