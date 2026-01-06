@@ -15,7 +15,6 @@ from app.services.agent import AgentService
 from app.services.lock import init_vault_lock
 from app.services.agent_chat import AgentChatService
 from app.services.agent_session_manager import AgentSessionManager
-from app.services.apn_service import APNService
 from app.services.chat_session_manager import ChatSessionManager
 from app.services.claude_session_api import ClaudeSessionAPI
 from app.services.container import init_container
@@ -24,6 +23,7 @@ from app.services.health import HealthCheckService
 from app.services.inbox import InboxService
 from app.services.logs import LogService
 from app.services import push_tokens
+from app.services.relay_client import PrimePushRelayClient
 from app.services.vault import VaultService
 from app.services.worker import AgentWorker
 from app.version import get_version
@@ -125,41 +125,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     git_service.initialize()
     vault_service.ensure_structure()
 
-    # Initialize APNs service (optional)
-    apn_service = None
-    if settings.apn_enabled:
-        try:
-            # Ensure APNs data directory exists
-            settings.apn_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"APNs directory initialized: {settings.apn_dir}")
-            logger.info(f"APNs devices file: {settings.apn_devices_file}")
-
-            # Initialize APNService
-            logger.debug("APNs service configuration loaded (credentials not logged for security)")
-
-            # Type guard: When apn_enabled=true, validators ensure these are non-None strings
-            assert settings.apple_p8_key is not None
-            assert settings.apple_team_id is not None
-            assert settings.apple_key_id is not None
-            assert settings.apple_bundle_id is not None
-
-            apn_service = APNService(
-                devices_file=settings.apn_devices_file,
-                key_content=settings.apple_p8_key,
-                team_id=settings.apple_team_id,
-                key_id=settings.apple_key_id,
-                bundle_id=settings.apple_bundle_id,
-                environment="production",  # Default to production
-                timeout_seconds=settings.apns_timeout_seconds,
-            )
-            logger.info("APNs service initialized successfully")
-        except ValueError as e:
-            logger.error(f"Failed to initialize APNs service: {e}")
-            # Continue without APNs if initialization fails
-            apn_service = None
-    else:
-        logger.info("APNs disabled in configuration")
-
     # Initialize AgentSessionManager
     agent_session_manager = AgentSessionManager(agent_service=agent_chat_service)
     agent_session_manager.start_cleanup_loop()
@@ -174,9 +139,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     health_service = HealthCheckService(
         vault_service=vault_service,
         git_service=git_service,
-        apn_service=apn_service,
         version=get_version(),
     )
+
+    # Initialize PrimePushRelay client
+    relay_client = PrimePushRelayClient(timeout_seconds=10)
 
     # Initialize service container (replaces per-module init_services calls)
     init_container(
@@ -188,7 +155,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         chat_session_manager=chat_session_manager,
         agent_chat_service=agent_chat_service,
         agent_session_manager=agent_session_manager,
-        apn_service=apn_service,
+        relay_client=relay_client,
         claude_session_api=claude_session_api,
         health_service=health_service,
     )

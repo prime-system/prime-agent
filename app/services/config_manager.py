@@ -188,7 +188,6 @@ class ConfigManager:
             # Validate configs
             try:
                 new_settings.validate_git_config()
-                new_settings.validate_apn_config()
                 new_settings.validate_cors_config()
             except ValueError as e:
                 msg = f"Configuration validation error: {e}"
@@ -250,19 +249,6 @@ class ConfigManager:
 
         if "logging" in config_dict and isinstance(config_dict["logging"], dict):
             flat_config["log_level"] = config_dict["logging"].get("level", "INFO")
-
-        # Apple Push Notifications (APNs) - optional
-        if "apn" in config_dict and isinstance(config_dict["apn"], dict):
-            flat_config["apn_enabled"] = config_dict["apn"].get("enabled", False)
-            flat_config["apple_team_id"] = config_dict["apn"].get("team_id")
-            flat_config["apple_bundle_id"] = config_dict["apn"].get("bundle_id")
-            flat_config["apple_key_id"] = config_dict["apn"].get("key_id")
-
-            # Get p8_key and process escape sequences
-            p8_key = config_dict["apn"].get("p8_key")
-            if p8_key and isinstance(p8_key, str):
-                p8_key = p8_key.encode().decode("unicode_escape")
-            flat_config["apple_p8_key"] = p8_key
 
         # Data directory
         if "storage" in config_dict and isinstance(config_dict["storage"], dict):

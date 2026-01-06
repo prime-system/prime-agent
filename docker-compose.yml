@@ -24,11 +24,6 @@ services:
       - GIT_SSH_KEY=${GIT_SSH_KEY:-}
       - GIT_USERNAME=${GIT_USERNAME:-}
       - GIT_TOKEN=${GIT_TOKEN:-}
-      # APNs secrets (optional, only needed if apn.enabled=true in config.yaml)
-      - APPLE_TEAM_ID=${APPLE_TEAM_ID:-}
-      - APPLE_BUNDLE_ID=${APPLE_BUNDLE_ID:-}
-      - APPLE_KEY_ID=${APPLE_KEY_ID:-}
-      - APPLE_P8_KEY=${APPLE_P8_KEY:-}
     restart: unless-stopped
     healthcheck:
       test:

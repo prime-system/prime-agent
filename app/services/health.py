@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 from app.models.health import HealthCheckResponse, HealthStatus, ServiceHealth
 
 if TYPE_CHECKING:
-    from app.services.apn_service import APNService
     from app.services.git import GitService
     from app.services.vault import VaultService
 
@@ -24,7 +23,6 @@ class HealthCheckService:
         self,
         vault_service: VaultService,
         git_service: GitService | None = None,
-        apn_service: APNService | None = None,
         version: str = "unknown",
     ) -> None:
         """
@@ -33,12 +31,10 @@ class HealthCheckService:
         Args:
             vault_service: VaultService instance
             git_service: GitService instance (optional)
-            apn_service: APNService instance (optional)
             version: Application version string
         """
         self.vault_service = vault_service
         self.git_service = git_service
-        self.apn_service = apn_service
         self.version = version
 
     async def check_vault_health(self) -> ServiceHealth:
@@ -128,41 +124,6 @@ class HealthCheckService:
                 message=f"Git check failed: {e}",
             )
 
-    async def check_apn_health(self) -> ServiceHealth:
-        """
-        Check APNs service health.
-
-        If APNs is disabled, returns HEALTHY status.
-        If APNs is enabled, verifies the service is configured.
-        """
-        if not self.apn_service:
-            return ServiceHealth(
-                name="apns",
-                status=HealthStatus.HEALTHY,
-                message="APNs disabled",
-            )
-
-        try:
-            # APNs health check is lightweight - just verify service exists
-            # The client initialization happens during startup, so if we're here,
-            # APNs is configured correctly
-            return ServiceHealth(
-                name="apns",
-                status=HealthStatus.HEALTHY,
-                message="APNs service configured",
-                details={
-                    "bundle_id": self.apn_service.bundle_id,
-                    "environment": self.apn_service.environment,
-                },
-            )
-        except Exception as e:
-            logger.exception("APNs health check failed")
-            return ServiceHealth(
-                name="apns",
-                status=HealthStatus.DEGRADED,
-                message=f"APNs check failed: {e}",
-            )
-
     async def check_health(self) -> HealthCheckResponse:
         """
         Perform complete health check.
@@ -173,13 +134,12 @@ class HealthCheckService:
             HealthCheckResponse with overall status and service details
         """
         # Check all services in parallel for efficiency
-        vault_health, git_health, apn_health = await asyncio.gather(
+        vault_health, git_health = await asyncio.gather(
             self.check_vault_health(),
             self.check_git_health(),
-            self.check_apn_health(),
         )
 
-        services = [vault_health, git_health, apn_health]
+        services = [vault_health, git_health]
 
         # Determine overall status
         if any(s.status == HealthStatus.UNHEALTHY for s in services):

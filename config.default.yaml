@@ -81,33 +81,6 @@ logging:
 #   Production: https://app.example.com
 base_url: http://localhost:8000
 
-apn:
-  # Apple Push Notifications (APNs) configuration
-  # Only required if you need to send push notifications to iOS/macOS app
-
-  # Enable/disable APNs capability
-  enabled: false
-
-  # Apple Developer Account Team ID (10-character alphanumeric)
-  # Find in Apple Developer account > Settings > Team ID
-  # Provide via APPLE_TEAM_ID environment variable
-  team_id: ${APPLE_TEAM_ID}
-
-  # Bundle ID for PrimeApp (from Xcode project)
-  # Example: com.example.primeapp
-  # Provide via APPLE_BUNDLE_ID environment variable
-  bundle_id: ${APPLE_BUNDLE_ID}
-
-  # Key ID from Apple Developer account
-  # From Apple Developer > Keys > App Development (10-character alphanumeric)
-  # Provide via APPLE_KEY_ID environment variable
-  key_id: ${APPLE_KEY_ID}
-
-  # Full p8 key content from Apple Developer
-  # Download .p8 file and provide entire contents (including BEGIN/END lines)
-  # Provide via APPLE_P8_KEY environment variable
-  p8_key: ${APPLE_P8_KEY}
-
 storage:
   # Data directory for persistent storage (not vault-managed)
   # Used for device tokens and other persistent data

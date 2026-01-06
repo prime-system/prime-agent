@@ -12,13 +12,13 @@ if TYPE_CHECKING:
     from app.services.agent import AgentService
     from app.services.agent_chat import AgentChatService
     from app.services.agent_session_manager import AgentSessionManager
-    from app.services.apn_service import APNService
     from app.services.chat_session_manager import ChatSessionManager
     from app.services.claude_session_api import ClaudeSessionAPI
     from app.services.git import GitService
     from app.services.health import HealthCheckService
     from app.services.inbox import InboxService
     from app.services.logs import LogService
+    from app.services.relay_client import PrimePushRelayClient
     from app.services.vault import VaultService
 
 security = HTTPBearer()
@@ -88,10 +88,10 @@ async def get_agent_session_manager() -> AgentSessionManager:
     return container.agent_session_manager
 
 
-async def get_apn_service() -> APNService | None:
-    """Get APN service via dependency injection (may be None if disabled)."""
+async def get_relay_client() -> PrimePushRelayClient:
+    """Get PrimePushRelay client via dependency injection."""
     container = get_container()
-    return container.apn_service
+    return container.relay_client
 
 
 async def get_claude_session_api() -> ClaudeSessionAPI:

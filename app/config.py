@@ -182,10 +182,6 @@ class Settings(BaseSettings):
         default=1800,
         description="Timeout for Anthropic API calls (includes long agent operations)",
     )
-    apns_timeout_seconds: int = Field(
-        default=5,
-        description="Timeout for Apple Push Notification calls",
-    )
     git_timeout_seconds: int = Field(
         default=30,
         description="Timeout for Git operations (clone, pull, push)",
@@ -194,15 +190,12 @@ class Settings(BaseSettings):
     # Observability
     log_level: str = "INFO"
 
-    # Apple Push Notifications (APNs) - all optional
-    apn_enabled: bool = False  # Enable/disable APNs capability
-    apple_team_id: str | None = None  # Apple Team ID
-    apple_bundle_id: str | None = None  # Bundle ID for PrimeApp
-    apple_key_id: str | None = None  # Key ID from Apple Developer
-    apple_p8_key: str | None = None  # Full p8 key content (raw, multiline)
-
     # Data directory for persistent storage
     data_path: str = "/data"  # Persistent data storage (not vault-managed)
+    apn_devices_file: Path = Field(
+        default=Path("/data/apn/devices.json"),
+        description="Path to APNs device tokens file (for backward compatibility)",
+    )
 
     @field_validator("vault_repo_url", mode="after")
     @classmethod
@@ -210,16 +203,6 @@ class Settings(BaseSettings):
         """Validate that git.repo_url is set when git.enabled=true."""
         if info.data.get("git_enabled") and not v:
             msg = "git.enabled=true requires git.repo_url to be set in config.yaml"
-            raise ValueError(msg)
-        return v
-
-    @field_validator("apple_team_id", "apple_bundle_id", "apple_key_id", "apple_p8_key", mode="after")
-    @classmethod
-    def validate_apn_fields(cls, v: str | None, info) -> str | None:
-        """Validate that all APNs fields are set when apn.enabled=true."""
-        if info.data.get("apn_enabled") and not v:
-            field_name = info.field_name
-            msg = f"apn.enabled=true requires {field_name} to be set in config.yaml"
             raise ValueError(msg)
         return v
 
@@ -254,38 +237,6 @@ class Settings(BaseSettings):
                 if not origin.startswith("https://"):
                     msg = f"CORS origin must be HTTPS in production: {origin}"
                     raise ValueError(msg)
-
-    def validate_apn_config(self) -> None:
-        """Validate APNs configuration consistency (called explicitly after creation)."""
-        if not self.apn_enabled:
-            return  # APNs not required if disabled
-
-        required_fields = {
-            "apn.team_id": self.apple_team_id,
-            "apn.bundle_id": self.apple_bundle_id,
-            "apn.key_id": self.apple_key_id,
-            "apn.p8_key": self.apple_p8_key,
-        }
-
-        missing = [name for name, value in required_fields.items() if not value]
-        if missing:
-            msg = f"apn.enabled=true requires: {', '.join(missing)} in config.yaml"
-            raise ValueError(msg)
-
-    @property
-    def apn_dir(self) -> Path:
-        """APNs directory path in persistent /data storage."""
-        return Path(self.data_path) / "apn"
-
-    @property
-    def apn_devices_file(self) -> Path:
-        """APNs devices file path."""
-        return self.apn_dir / "devices.json"
-
-    @property
-    def apn_tokens_file(self) -> Path:
-        """APNs tokens file path (deprecated, use apn_devices_file)."""
-        return self.apn_devices_file
 
 
 def _build_settings_from_yaml() -> Settings:
@@ -353,27 +304,6 @@ def _build_settings_from_yaml() -> Settings:
     if "cors_allowed_origins" not in flat_config:
         base_url = flat_config.get("base_url")
         flat_config["cors_allowed_origins"] = _get_cors_origins_from_base_url(base_url, environment)
-
-    # Apple Push Notifications (APNs) - optional
-    if "apn" in config_dict and isinstance(config_dict["apn"], dict):
-        flat_config["apn_enabled"] = config_dict["apn"].get("enabled", False)
-        flat_config["apple_team_id"] = config_dict["apn"].get("team_id")
-        flat_config["apple_bundle_id"] = config_dict["apn"].get("bundle_id")
-        flat_config["apple_key_id"] = config_dict["apn"].get("key_id")
-
-        # Get p8_key and process escape sequences (convert literal \n to actual newlines)
-        p8_key = config_dict["apn"].get("p8_key")
-        if p8_key and isinstance(p8_key, str):
-            # Convert literal \n to actual newlines
-            p8_key = p8_key.encode().decode("unicode_escape")
-        flat_config["apple_p8_key"] = p8_key
-
-        # APNs configuration validation
-        if flat_config["apn_enabled"]:
-            logger.debug(
-                "APNs service configured: bundle_id=%s",
-                flat_config["apple_bundle_id"],
-            )
 
     # Data directory
     if "storage" in config_dict and isinstance(config_dict["storage"], dict):
