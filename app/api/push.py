@@ -15,7 +15,7 @@ from app.models.push import (
     RegisterRequest,
     UnregisterRequest,
 )
-from app.services import push_tokens
+from app.services import device_registry
 from app.services.apn_service import APNService
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ async def register_device(
     If token already exists, updates last_seen and device_name.
     """
     try:
-        await push_tokens.add_or_update_token(
+        await device_registry.add_or_update_device(
             tokens_file=settings.apn_devices_file,
             token=request.token,
             device_type=request.device_type,
@@ -71,7 +71,7 @@ async def unregister_device(
     Returns success=true even if token was not found (idempotent).
     """
     try:
-        removed = await push_tokens.remove_token(
+        removed = await device_registry.remove_device(
             tokens_file=settings.apn_devices_file,
             token=request.token,
         )

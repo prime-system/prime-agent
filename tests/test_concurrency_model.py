@@ -25,7 +25,7 @@ async def test_no_threading_locks_in_async_files() -> None:
     # List of files we know have async code
     async_files = [
         "app/services/apn_service.py",
-        "app/services/push_tokens.py",
+        "app/services/device_registry.py",
         "app/api/push.py",
         "app/main.py",
         "app/services/worker.py",
@@ -172,31 +172,31 @@ async def test_no_synchronous_blocking_in_event_loop() -> None:
 
 
 @pytest.mark.asyncio
-async def test_push_tokens_lock_initialization() -> None:
-    """Test that push_tokens module can initialize async lock."""
-    from app.services import push_tokens
+async def test_device_registry_lock_initialization() -> None:
+    """Test that device_registry module can initialize async lock."""
+    from app.services import device_registry
 
     # Initialize the lock
-    lock = await push_tokens.init_file_lock()
+    lock = await device_registry.init_file_lock()
 
     # Verify we can use it
     async with lock:
         pass  # Should work without error
 
     # Verify get_file_lock returns the same lock
-    retrieved_lock = push_tokens.get_file_lock()
+    retrieved_lock = device_registry.get_file_lock()
     assert retrieved_lock is lock, "Should return initialized lock"
 
 
 @pytest.mark.asyncio
 async def test_concurrent_file_lock_access() -> None:
     """Test that file lock properly serializes access."""
-    from app.services import push_tokens
+    from app.services import device_registry
     from pathlib import Path
     import tempfile
 
     # Initialize the lock
-    await push_tokens.init_file_lock()
+    await device_registry.init_file_lock()
 
     # Create a temporary file
     with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
@@ -208,7 +208,7 @@ async def test_concurrent_file_lock_access() -> None:
 
         async def task(task_id: int) -> None:
             # Simulate concurrent access
-            async with push_tokens.get_file_lock():
+            async with device_registry.get_file_lock():
                 access_order.append(task_id)
                 await asyncio.sleep(0.01)
                 access_order.append(task_id)
@@ -243,7 +243,7 @@ def test_ast_check_no_threading_imports() -> None:
     # Core async service files
     files_to_check = [
         "app/services/apn_service.py",
-        "app/services/push_tokens.py",
+        "app/services/device_registry.py",
     ]
 
     for file_path_str in files_to_check:

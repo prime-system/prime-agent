@@ -22,7 +22,7 @@ from app.services.git import GitService
 from app.services.health import HealthCheckService
 from app.services.inbox import InboxService
 from app.services.logs import LogService
-from app.services import push_tokens
+from app.services import device_registry
 from app.services.relay_client import PrimePushRelayClient
 from app.services.vault import VaultService
 from app.services.worker import AgentWorker
@@ -79,7 +79,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Initialize async locks in the running event loop (MUST be first!)
     await init_vault_lock()
-    await push_tokens.init_file_lock()
+    await device_registry.init_file_lock()
 
     # Initialize services
     vault_service = VaultService(settings.vault_path)
