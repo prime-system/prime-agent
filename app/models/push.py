@@ -5,60 +5,27 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
-class RegisterRequest(BaseModel):
-    """Device token registration request."""
+class DeviceRegisterRequest(BaseModel):
+    """Device registration request."""
 
-    token: str = Field(..., description="APNs device token (64 hex characters)")
-    device_type: Literal["iphone", "ipad", "mac"] = Field(..., description="Device type")
-    device_name: str | None = Field(
-        None,
-        description="Optional human-readable device name",
-        max_length=64,
-    )
-    environment: Literal["development", "production"] = Field(
-        ...,
-        description="APNs environment",
-    )
-
-
-class UnregisterRequest(BaseModel):
-    """Device token unregistration request."""
-
-    token: str = Field(..., description="APNs device token to remove")
+    installation_id: str = Field(..., description="UUID from PrimeMobileApp")
+    device_name: str | None = Field(None, description="Device name", max_length=64)
+    device_type: Literal["iphone", "ipad", "mac"] = Field("iphone", description="Device type")
+    push_url: str = Field(..., description="Capability URL from PrimePushRelay binding")
 
 
 class NotificationSendRequest(BaseModel):
     """Push notification send request."""
 
-    device_id: str | None = Field(
-        None,
-        description="Optional device ID to send to (send to all if omitted)",
-    )
     device_filter: str | None = Field(
         None,
         description="Optional device filter (name or type: iphone, ipad, mac)",
     )
-    environment: Literal["development", "production"] | None = Field(
-        None,
-        description="Optional environment filter (development or production)",
-    )
-    title: str = Field(..., description="Notification title")
-    body: str = Field(..., description="Notification body")
-    priority: Literal["high", "normal"] = Field(
-        "normal",
-        description="Notification priority",
-    )
-    sound: str = Field(
-        "default",
-        description="Notification sound",
-    )
-    badge: int | None = Field(
-        None,
-        description="Badge count (optional)",
-    )
+    title: str = Field(..., description="Notification title", max_length=100)
+    body: str = Field(..., description="Notification body", max_length=500)
     data: dict[str, Any] | None = Field(
         None,
-        description="Custom data dict",
+        description="Custom data dict (max 2KB)",
     )
 
 
