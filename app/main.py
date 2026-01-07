@@ -2,6 +2,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
@@ -23,7 +24,8 @@ from app.services.git import GitService
 from app.services.health import HealthCheckService
 from app.services.inbox import InboxService
 from app.services.logs import LogService
-from app.services import device_registry
+from app.services import agent_identity, device_registry
+from app.services.agent_identity import AgentIdentityService
 from app.services.relay_client import PrimePushRelayClient
 from app.services.vault import VaultService
 from app.services.worker import AgentWorker
@@ -81,9 +83,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Initialize async locks in the running event loop (MUST be first!)
     await init_vault_lock()
     await device_registry.init_file_lock()
+    await agent_identity.init_file_lock()
 
     # Initialize services
     vault_service = VaultService(settings.vault_path)
+    agent_identity_service = AgentIdentityService(Path(settings.data_path))
+    await agent_identity_service.get_or_create_identity()  # Load/create at startup
 
     git_service = GitService(
         vault_path=settings.vault_path,
@@ -163,6 +168,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         claude_session_api=claude_session_api,
         health_service=health_service,
         command_service=command_service,
+        agent_identity_service=agent_identity_service,
     )
 
     # Initialize agent worker

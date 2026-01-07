@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from app.config import Settings, get_config_manager, settings
-from app.dependencies import get_vault_service, verify_token
+from app.dependencies import get_agent_identity_service, get_vault_service, verify_token
+from app.services.agent_identity import AgentIdentityService
 from app.services.vault import VaultService
 from app.version import get_version
 
@@ -28,6 +29,7 @@ class ServerInfoResponse(BaseModel):
 
     name: str = Field(description="Server name")
     version: str = Field(description="Server version")
+    prime_agent_id: str = Field(description="Unique persistent agent identifier")
 
 
 class ConfigResponse(BaseModel):
@@ -40,12 +42,16 @@ class ConfigResponse(BaseModel):
 @router.get("/config", response_model=ConfigResponse)
 async def get_config(
     vault_service: VaultService = Depends(get_vault_service),
+    agent_identity_service: AgentIdentityService = Depends(get_agent_identity_service),
+    _: None = Depends(verify_token),
 ) -> ConfigResponse:
     """
     Get server configuration and feature flags.
 
     Returns information about enabled features so clients can
     adapt their UI dynamically.
+
+    Requires authentication token.
     """
     vault_path = vault_service.vault_path
 
@@ -64,6 +70,7 @@ async def get_config(
         server_info=ServerInfoResponse(
             name="Prime",
             version=get_version(),
+            prime_agent_id=agent_identity_service.get_cached_identity() or "unknown",
         ),
     )
 

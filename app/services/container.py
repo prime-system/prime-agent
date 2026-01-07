@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.services.agent import AgentService
     from app.services.agent_chat import AgentChatService
+    from app.services.agent_identity import AgentIdentityService
     from app.services.agent_session_manager import AgentSessionManager
     from app.services.chat_session_manager import ChatSessionManager
     from app.services.claude_session_api import ClaudeSessionAPI
@@ -45,6 +46,7 @@ class ServiceContainer:
         claude_session_api: ClaudeSessionAPI,
         health_service: HealthCheckService,
         command_service: CommandService,
+        agent_identity_service: AgentIdentityService,
     ) -> None:
         """Initialize service container with all required services."""
         self.vault_service = vault_service
@@ -59,6 +61,7 @@ class ServiceContainer:
         self.claude_session_api = claude_session_api
         self.health_service = health_service
         self.command_service = command_service
+        self.agent_identity_service = agent_identity_service
 
 
 _container: ServiceContainer | None = None
@@ -77,6 +80,7 @@ def init_container(
     claude_session_api: ClaudeSessionAPI,
     health_service: HealthCheckService,
     command_service: CommandService,
+    agent_identity_service: AgentIdentityService,
 ) -> None:
     """Initialize service container (called once in FastAPI lifespan).
 
@@ -93,6 +97,7 @@ def init_container(
         claude_session_api: ClaudeSessionAPI for Claude session access
         health_service: HealthCheckService for health checks
         command_service: CommandService for managing slash commands
+        agent_identity_service: AgentIdentityService for persistent agent ID
     """
     global _container
     _container = ServiceContainer(
@@ -108,6 +113,7 @@ def init_container(
         claude_session_api=claude_session_api,
         health_service=health_service,
         command_service=command_service,
+        agent_identity_service=agent_identity_service,
     )
 
 

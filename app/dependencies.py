@@ -11,6 +11,7 @@ from app.services.container import get_container
 if TYPE_CHECKING:
     from app.services.agent import AgentService
     from app.services.agent_chat import AgentChatService
+    from app.services.agent_identity import AgentIdentityService
     from app.services.agent_session_manager import AgentSessionManager
     from app.services.chat_session_manager import ChatSessionManager
     from app.services.claude_session_api import ClaudeSessionAPI
@@ -104,3 +105,9 @@ async def get_health_service() -> HealthCheckService:
     """Get health check service via dependency injection."""
     container = get_container()
     return container.health_service
+
+
+async def get_agent_identity_service() -> AgentIdentityService:
+    """Get agent identity service via dependency injection."""
+    container = get_container()
+    return container.agent_identity_service
