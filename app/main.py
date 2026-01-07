@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import capture, chat, claude_sessions, config, files, git, health, monitoring, processing, push
+from app.api import capture, chat, claude_sessions, commands, config, files, git, health, monitoring, processing, push
 from app.config import settings
 from app.logging_config import configure_json_logging
 from app.middleware.request_id import RequestIDMiddleware
@@ -17,6 +17,7 @@ from app.services.agent_chat import AgentChatService
 from app.services.agent_session_manager import AgentSessionManager
 from app.services.chat_session_manager import ChatSessionManager
 from app.services.claude_session_api import ClaudeSessionAPI
+from app.services.command import CommandService
 from app.services.container import init_container
 from app.services.git import GitService
 from app.services.health import HealthCheckService
@@ -145,6 +146,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Initialize PrimePushRelay client
     relay_client = PrimePushRelayClient(timeout_seconds=10)
 
+    # Initialize command service
+    command_service = CommandService(str(vault_service.vault_path))
+
     # Initialize service container (replaces per-module init_services calls)
     init_container(
         vault_service=vault_service,
@@ -158,6 +162,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         relay_client=relay_client,
         claude_session_api=claude_session_api,
         health_service=health_service,
+        command_service=command_service,
     )
 
     # Initialize agent worker
@@ -226,6 +231,7 @@ else:
 app.include_router(capture.router, tags=["capture"])
 app.include_router(chat.router)
 app.include_router(claude_sessions.router)
+app.include_router(commands.router, tags=["commands"])
 app.include_router(config.router)
 app.include_router(files.router, tags=["files"])
 app.include_router(git.router, tags=["git"])

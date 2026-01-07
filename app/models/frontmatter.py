@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class CaptureSource(str, Enum):
@@ -75,23 +76,66 @@ class CaptureFrontmatter(BaseModel):
 
 class CommandFrontmatter(BaseModel):
     """
-    Validated frontmatter for Claude command files.
+    Validated frontmatter for Claude slash command files.
 
-    Allows vault-specific customization of agent behavior.
+    Follows the Claude Code slash command specification:
+    https://code.claude.com/docs/en/slash-commands.md
 
     Schema:
         ---
-        description: Process and organize brain dumps
-        version: 1
-        requires_lock: true
+        allowed-tools: Bash(git:*), Read, Write
+        argument-hint: [pr-number] [priority]
+        description: Review pull request
+        model: claude-3-5-haiku-20241022
+        disable-model-invocation: false
         ---
     """
 
-    description: str = Field(
-        default="", description="Command description"
+    allowed_tools: list[str] | None = Field(
+        default=None,
+        description="List of tools the command can use",
+        alias="allowed-tools",
     )
-    version: int = Field(default=1, description="Command version")
-    requires_lock: bool = Field(
+    argument_hint: str | None = Field(
+        default=None,
+        description="Arguments expected for the slash command",
+        alias="argument-hint",
+    )
+    description: str | None = Field(
+        default=None, description="Brief description of the command"
+    )
+    model: str | None = Field(
+        default=None, description="Specific model string"
+    )
+    disable_model_invocation: bool = Field(
         default=False,
-        description="Whether command requires vault lock",
+        description="Whether to prevent SlashCommand tool from calling this command",
+        alias="disable-model-invocation",
     )
+
+    model_config = {
+        "populate_by_name": True  # Allow both snake_case and kebab-case field names
+    }
+
+    @field_validator("argument_hint", mode="before")
+    @classmethod
+    def normalize_argument_hint(cls, value: Any) -> str | None:
+        """
+        Normalize argument-hint from YAML format to string.
+
+        In YAML, unquoted brackets are parsed as arrays:
+        - `argument-hint: [message]` → YAML parses as `['message']` (list)
+        - `argument-hint: '[message]'` → YAML parses as `'[message]'` (string)
+
+        This validator handles both formats to match Claude Code's behavior.
+        """
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return value
+        if isinstance(value, list):
+            # Convert list to bracketed string format
+            # ['message'] → '[message]'
+            # ['pr-number', 'priority'] → '[pr-number] [priority]'
+            return " ".join(f"[{item}]" for item in value)
+        return str(value)

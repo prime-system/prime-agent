@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from app.services.agent_session_manager import AgentSessionManager
     from app.services.chat_session_manager import ChatSessionManager
     from app.services.claude_session_api import ClaudeSessionAPI
+    from app.services.command import CommandService
     from app.services.git import GitService
     from app.services.health import HealthCheckService
     from app.services.inbox import InboxService
@@ -43,6 +44,7 @@ class ServiceContainer:
         relay_client: PrimePushRelayClient,
         claude_session_api: ClaudeSessionAPI,
         health_service: HealthCheckService,
+        command_service: CommandService,
     ) -> None:
         """Initialize service container with all required services."""
         self.vault_service = vault_service
@@ -56,6 +58,7 @@ class ServiceContainer:
         self.relay_client = relay_client
         self.claude_session_api = claude_session_api
         self.health_service = health_service
+        self.command_service = command_service
 
 
 _container: ServiceContainer | None = None
@@ -73,6 +76,7 @@ def init_container(
     relay_client: PrimePushRelayClient,
     claude_session_api: ClaudeSessionAPI,
     health_service: HealthCheckService,
+    command_service: CommandService,
 ) -> None:
     """Initialize service container (called once in FastAPI lifespan).
 
@@ -88,6 +92,7 @@ def init_container(
         relay_client: PrimePushRelayClient for push notifications
         claude_session_api: ClaudeSessionAPI for Claude session access
         health_service: HealthCheckService for health checks
+        command_service: CommandService for managing slash commands
     """
     global _container
     _container = ServiceContainer(
@@ -102,6 +107,7 @@ def init_container(
         relay_client=relay_client,
         claude_session_api=claude_session_api,
         health_service=health_service,
+        command_service=command_service,
     )
 
 
