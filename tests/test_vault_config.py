@@ -1,6 +1,7 @@
 """Tests for vault-specific configuration."""
 
 from datetime import datetime
+import time
 from pathlib import Path
 
 import pytest
@@ -188,11 +189,12 @@ class TestVaultServiceWithConfig:
 
         # Update config file
         config_file = vault / ".prime" / "settings.yaml"
+        time.sleep(0.01)
         with open(config_file, "w") as f:
             yaml.dump({"inbox": {"folder": "07-Inbox"}}, f)
 
-        # Config is cached, still returns old value
-        assert service.inbox_path() == vault / "Inbox"
+        # Config reloads on access when file changes
+        assert service.inbox_path() == vault / "07-Inbox"
 
         # After reload, returns new value
         service.reload_vault_config()

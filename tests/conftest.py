@@ -90,11 +90,12 @@ def mock_git_service():
 @pytest.fixture
 def test_app():
     """Create a test FastAPI app without the lifespan that initializes git."""
-    from app.api import capture, health
+    from app.api import capture, health, processing
 
     app = FastAPI(title="Prime Server Test")
     app.include_router(capture.router, tags=["capture"])
     app.include_router(health.router)
+    app.include_router(processing.router)
 
     return app
 

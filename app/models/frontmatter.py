@@ -104,6 +104,18 @@ class CommandFrontmatter(BaseModel):
         "populate_by_name": True  # Allow both snake_case and kebab-case field names
     }
 
+    @field_validator("allowed_tools", mode="before")
+    @classmethod
+    def normalize_allowed_tools(cls, value: Any) -> list[str] | None:
+        """Normalize allowed-tools to a list."""
+        if value is None:
+            return None
+        if isinstance(value, list):
+            return value
+        if isinstance(value, str):
+            return [value]
+        return [str(value)]
+
     @field_validator("argument_hint", mode="before")
     @classmethod
     def normalize_argument_hint(cls, value: Any) -> str | None:

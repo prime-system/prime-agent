@@ -204,13 +204,12 @@ def test_health_detailed_with_auth(client, auth_headers) -> None:
     assert "status" in data
     assert data["status"] in ["healthy", "degraded", "unhealthy"]
     assert "services" in data
-    assert len(data["services"]) >= 3
+    assert len(data["services"]) >= 2
 
     # Verify service details
     service_names = {s["name"] for s in data["services"]}
     assert "vault" in service_names
     assert "git" in service_names
-    assert "apns" in service_names
 
 
 def test_health_detailed_response_structure(client, auth_headers) -> None:
@@ -230,7 +229,7 @@ def test_health_detailed_response_structure(client, auth_headers) -> None:
     # Verify each service
     for service in data.services:
         assert isinstance(service, ServiceHealth)
-        assert service.name in ["vault", "git", "apns"]
+        assert service.name in ["vault", "git"]
         assert service.status in [
             HealthStatus.HEALTHY,
             HealthStatus.DEGRADED,

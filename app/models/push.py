@@ -11,8 +11,8 @@ class DeviceRegisterRequest(BaseModel):
     installation_id: str = Field(..., description="UUID from PrimeMobileApp")
     device_name: str | None = Field(None, description="Device name", max_length=64)
     device_type: Literal["iphone", "ipad", "mac"] = Field("iphone", description="Device type")
-    push_url: str | None = Field(
-        None,
+    push_url: str = Field(
+        ...,
         description="Capability URL (required for new devices, optional for updates)",
     )
 

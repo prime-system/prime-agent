@@ -95,8 +95,10 @@ Example: "meeting-notes-with-team" or "grocery-shopping-list"
                     await aclose()
 
             # Extract result after generator finishes
-            if title_result and len(title_result) >= 3:
-                return title_result[:max_length].rstrip("-")
+            if title_result:
+                sanitized = self._sanitize_title(title_result)
+                if len(sanitized) >= 3:
+                    return sanitized[:max_length].rstrip("-")
 
             # Fallback if no title was generated
             return self._fallback_title(text, max_length)
@@ -109,7 +111,7 @@ Example: "meeting-notes-with-team" or "grocery-shopping-list"
     def _sanitize_title(self, title: str) -> str:
         """Make title filesystem-safe."""
         # Remove quotes and extra whitespace
-        title = title.strip().strip('"').strip("'")
+        title = title.strip().strip('"').strip("'").lower()
 
         # Replace spaces with hyphens
         title = title.replace(" ", "-")

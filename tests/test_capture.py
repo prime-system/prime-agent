@@ -76,8 +76,8 @@ def test_capture_success(client, auth_headers, sample_capture_request):
     assert data["ok"] is True
     assert "inbox_file" in data
     assert "dump_id" in data
-    # Per-capture mode with weekly subfolders: Inbox/YYYY-Www/YYYY-MM-DD_HH-MM-SS_source.md
-    assert data["inbox_file"] == "Inbox/2025-W51/2025-12-21_14-30-00_iphone.md"
+    # Per-capture mode with weekly subfolders: .prime/inbox/YYYY-Www/YYYY-MM-DD_HH-MM-SS_source.md
+    assert data["inbox_file"] == ".prime/inbox/2025-W51/2025-12-21_14-30-00_iphone.md"
     assert data["dump_id"] == "2025-12-21T14:30:00Z-iphone"
 
 

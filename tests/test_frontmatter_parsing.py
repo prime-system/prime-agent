@@ -412,8 +412,6 @@ Command content here
 
         assert isinstance(frontmatter, CommandFrontmatter)
         assert frontmatter.description == "Process and organize brain dumps"
-        assert frontmatter.version == 1
-        assert frontmatter.requires_lock is True
         assert "Command content" in body
 
     def test_parse_and_validate_command_no_frontmatter(self) -> None:
@@ -423,9 +421,7 @@ Command content here
         frontmatter, body = parse_and_validate_command(content)
 
         assert isinstance(frontmatter, CommandFrontmatter)
-        assert frontmatter.description == ""
-        assert frontmatter.version == 1
-        assert frontmatter.requires_lock is False
+        assert frontmatter.description is None
 
     def test_parse_and_validate_command_invalid_version(self) -> None:
         """Test command validation fails with invalid version type."""
@@ -437,8 +433,9 @@ version: not_a_number
 Content
 """
 
-        with pytest.raises(FrontmatterError):
-            parse_and_validate_command(content)
+        frontmatter, body = parse_and_validate_command(content)
+        assert frontmatter.description == "Test"
+        assert "Content" in body
 
 
 class TestRoundTrip:

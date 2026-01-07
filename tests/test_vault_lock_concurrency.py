@@ -153,6 +153,7 @@ async def test_vault_lock_exception_handling():
                 raise ValueError("Simulated error")
         except ValueError:
             tasks_completed.append("caught")
+            raise
 
     async def normal_task() -> None:
         """Normal task that should execute after failing task."""

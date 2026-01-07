@@ -6,6 +6,7 @@ enabling sessions to persist across reconnections.
 """
 
 import asyncio
+import functools
 import logging
 from collections import deque
 from dataclasses import dataclass, field
@@ -353,30 +354,34 @@ class AgentSessionManager:
                     },
                 )
 
+    async def _cleanup_once(self) -> None:
+        """Run a single cleanup pass for inactive sessions."""
+        now = datetime.now(UTC)
+        to_terminate = []
+
+        async with self._lock:
+            for session_id, state in self.sessions.items():
+                # Check for timeout
+                inactive_seconds = (now - state.last_activity).total_seconds()
+                if inactive_seconds > self.TIMEOUT_SECONDS:
+                    logger.info(
+                        "Session %s timed out (inactive for %ds)",
+                        session_id,
+                        inactive_seconds,
+                    )
+                    to_terminate.append(session_id)
+
+        # Terminate outside lock to avoid deadlock
+        for session_id in to_terminate:
+            await self.terminate_session(session_id)
+
+    @functools.wraps(_cleanup_once)
     async def _cleanup_loop(self) -> None:
         """Background task to cleanup inactive sessions."""
         try:
             while True:
                 await asyncio.sleep(60)  # Check every minute
-
-                now = datetime.now(UTC)
-                to_terminate = []
-
-                async with self._lock:
-                    for session_id, state in self.sessions.items():
-                        # Check for timeout
-                        inactive_seconds = (now - state.last_activity).total_seconds()
-                        if inactive_seconds > self.TIMEOUT_SECONDS:
-                            logger.info(
-                                "Session %s timed out (inactive for %ds)",
-                                session_id,
-                                inactive_seconds,
-                            )
-                            to_terminate.append(session_id)
-
-                # Terminate outside lock to avoid deadlock
-                for session_id in to_terminate:
-                    await self.terminate_session(session_id)
+                await self._cleanup_once()
 
         except asyncio.CancelledError:
             logger.info("Cleanup loop cancelled")

@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
-if TYPE_CHECKING:
-    from app.models.frontmatter import CommandFrontmatter
+from app.models.frontmatter import CommandFrontmatter
 
 
 class CommandType(str, Enum):

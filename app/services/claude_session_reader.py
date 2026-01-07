@@ -32,10 +32,10 @@ class ClaudeMessage:
         return self.message.get("role")
 
     @property
-    def content(self) -> str:
+    def content(self) -> str | None:
         """Extract text content from message."""
         if not self.message:
-            return ""
+            return None
 
         content = self.message.get("content")
         if isinstance(content, str):

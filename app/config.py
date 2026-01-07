@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import yaml
-from pydantic import Field, ValidationError, ValidationInfo, field_validator
+from pydantic import Field, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -190,9 +190,10 @@ class Settings(BaseSettings):
 
     # Data directory for persistent storage
     data_path: str = "/data"  # Persistent data storage (not vault-managed)
+
     apn_devices_file: Path = Field(
         default=Path("/data/apn/devices.json"),
-        description="Path to APNs device tokens file (for backward compatibility)",
+        description="Path to device tokens file (for backward compatibility)",
     )
 
     @field_validator("vault_repo_url", mode="after")
@@ -235,6 +236,16 @@ class Settings(BaseSettings):
                 if not origin.startswith("https://"):
                     msg = f"CORS origin must be HTTPS in production: {origin}"
                     raise ValueError(msg)
+
+    @property
+    def apn_dir(self) -> Path:
+        """Directory for device registry storage."""
+        return Path(self.data_path) / "apn"
+
+    @property
+    def apn_tokens_file(self) -> Path:
+        """Path for device token storage."""
+        return self.apn_devices_file
 
 
 def _build_settings_from_yaml() -> Settings:
