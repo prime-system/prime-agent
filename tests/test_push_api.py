@@ -44,7 +44,7 @@ async def push_app(temp_devices_file, mock_relay_client, monkeypatch):
     )
 
     app = FastAPI(title="Prime Server Test")
-    app.include_router(push.router, prefix="/api/v1", tags=["push"])
+    app.include_router(push.router)
 
     # Override relay client dependency
     app.dependency_overrides[get_relay_client] = lambda: mock_relay_client
@@ -77,14 +77,14 @@ def auth_headers():
 
 
 class TestRegisterEndpoint:
-    """Test POST /api/v1/api/devices/register endpoint."""
+    """Test POST /api/v1/devices/register endpoint."""
 
     def test_register_new_device(
         self, push_client, valid_register_request, auth_headers, temp_devices_file
     ):
         """Register new device successfully."""
         response = push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json=valid_register_request,
             headers=auth_headers,
         )
@@ -113,7 +113,7 @@ class TestRegisterEndpoint:
         request["device_name"] = None
 
         response = push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json=request,
             headers=auth_headers,
         )
@@ -132,7 +132,7 @@ class TestRegisterEndpoint:
         """Register same installation_id twice updates existing entry."""
         # First registration
         push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json=valid_register_request,
             headers=auth_headers,
         )
@@ -143,7 +143,7 @@ class TestRegisterEndpoint:
         updated_request["push_url"] = "https://relay.example.com/push/new123/newsecret"
 
         response = push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json=updated_request,
             headers=auth_headers,
         )
@@ -162,7 +162,7 @@ class TestRegisterEndpoint:
         request["device_type"] = "invalid"
 
         response = push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json=request,
             headers=auth_headers,
         )
@@ -172,7 +172,7 @@ class TestRegisterEndpoint:
     def test_register_missing_required_fields(self, push_client, auth_headers):
         """Register with missing required fields returns 422."""
         response = push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json={"installation_id": "test-uuid"},  # Missing push_url
             headers=auth_headers,
         )
@@ -182,7 +182,7 @@ class TestRegisterEndpoint:
     def test_register_without_auth(self, push_client, valid_register_request):
         """Register without auth token returns 401."""
         response = push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json=valid_register_request,
         )
 
@@ -191,7 +191,7 @@ class TestRegisterEndpoint:
     def test_register_with_invalid_auth(self, push_client, valid_register_request):
         """Register with invalid auth token returns 401."""
         response = push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json=valid_register_request,
             headers={"Authorization": "Bearer wrong-token"},
         )
@@ -204,7 +204,7 @@ class TestRegisterEndpoint:
         """Register multiple different devices."""
         # Register first device
         response1 = push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json=valid_register_request,
             headers=auth_headers,
         )
@@ -218,7 +218,7 @@ class TestRegisterEndpoint:
         request2["push_url"] = "https://relay.example.com/push/def456/secret789"
 
         response2 = push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json=request2,
             headers=auth_headers,
         )
@@ -236,7 +236,7 @@ class TestRegisterEndpoint:
         request["device_name"] = "../../etc/passwd"
 
         response = push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json=request,
             headers=auth_headers,
         )
@@ -249,7 +249,7 @@ class TestRegisterEndpoint:
 
 
 class TestSendNotificationEndpoint:
-    """Test POST /api/v1/notifications/send endpoint."""
+    """Test POST /api/notifications/send endpoint."""
 
     def test_send_to_single_device(
         self,
@@ -262,7 +262,7 @@ class TestSendNotificationEndpoint:
         """Send notification to single registered device."""
         # Register a device first
         push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json=valid_register_request,
             headers=auth_headers,
         )
@@ -308,7 +308,7 @@ class TestSendNotificationEndpoint:
         """Send notification to multiple devices."""
         # Register two devices
         push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json=valid_register_request,
             headers=auth_headers,
         )
@@ -318,7 +318,7 @@ class TestSendNotificationEndpoint:
         request2["device_type"] = "ipad"
         request2["push_url"] = "https://relay.example.com/push/def456/secret789"
         push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json=request2,
             headers=auth_headers,
         )
@@ -355,7 +355,7 @@ class TestSendNotificationEndpoint:
         """Send notification with device filter."""
         # Register two devices
         push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json=valid_register_request,
             headers=auth_headers,
         )
@@ -365,7 +365,7 @@ class TestSendNotificationEndpoint:
         request2["device_type"] = "ipad"
         request2["push_url"] = "https://relay.example.com/push/def456/secret789"
         push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json=request2,
             headers=auth_headers,
         )
@@ -401,7 +401,7 @@ class TestSendNotificationEndpoint:
         """Send notification handles 410 Gone response by removing device."""
         # Register a device
         push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json=valid_register_request,
             headers=auth_headers,
         )
@@ -449,7 +449,7 @@ class TestSendNotificationEndpoint:
         """Send notification handles non-410 HTTP errors without removing device."""
         # Register a device
         push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json=valid_register_request,
             headers=auth_headers,
         )
@@ -534,7 +534,7 @@ class TestListDevicesEndpoint:
         """List registered devices."""
         # Register two devices
         push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json=valid_register_request,
             headers=auth_headers,
         )
@@ -544,7 +544,7 @@ class TestListDevicesEndpoint:
         request2["device_type"] = "ipad"
         request2["push_url"] = "https://relay.example.com/push/def456/secret789"
         push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json=request2,
             headers=auth_headers,
         )
@@ -572,7 +572,7 @@ class TestListDevicesEndpoint:
         """List devices with filter."""
         # Register two devices
         push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json=valid_register_request,
             headers=auth_headers,
         )
@@ -582,7 +582,7 @@ class TestListDevicesEndpoint:
         request2["device_type"] = "ipad"
         request2["push_url"] = "https://relay.example.com/push/def456/secret789"
         push_client.post(
-            "/api/v1/api/devices/register",
+            "/api/v1/devices/register",
             json=request2,
             headers=auth_headers,
         )

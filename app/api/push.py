@@ -19,10 +19,10 @@ from app.services import device_registry
 from app.services.relay_client import PrimePushRelayClient
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(prefix="/api/v1", tags=["push"])
 
 
-@router.post("/api/devices/register", response_model=PushResponse)
+@router.post("/devices/register", response_model=PushResponse)
 async def register_device(
     request: DeviceRegisterRequest,
     _: None = Depends(verify_token),
