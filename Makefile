@@ -1,14 +1,22 @@
-.PHONY: help lint format type-check test test-cov coverage-report coverage-check clean install-dev pre-commit-install dev dev-build dev-down dev-logs dev-shell update-lock release release-push
+.PHONY: help lint format type-check test test-cov coverage-report coverage-check clean install-dev pre-commit-install dev dev-build dev-down dev-logs dev-shell dev-local dev-local-build dev-local-down dev-local-logs dev-local-shell dev-local-clean update-lock release release-push
 
 help:
 	@echo "Available commands:"
 	@echo ""
-	@echo "Development (Docker):"
+	@echo "Development (Docker - named volumes):"
 	@echo "  make dev                Start dev server (docker compose up)"
 	@echo "  make dev-build          Rebuild and start dev server"
 	@echo "  make dev-down           Stop dev server"
 	@echo "  make dev-logs           Follow dev server logs"
 	@echo "  make dev-shell          Shell into running container"
+	@echo ""
+	@echo "Development (Docker - local volumes in .dev-volumes/):"
+	@echo "  make dev-local          Start dev server with local mounts"
+	@echo "  make dev-local-build    Rebuild and start with local mounts"
+	@echo "  make dev-local-down     Stop dev server with local mounts"
+	@echo "  make dev-local-logs     Follow dev server logs"
+	@echo "  make dev-local-shell    Shell into running container"
+	@echo "  make dev-local-clean    Remove .dev-volumes/ directory"
 	@echo ""
 	@echo "Code Quality:"
 	@echo "  make install-dev        Install dev dependencies with uv"
@@ -75,7 +83,7 @@ clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 
-# Docker dev commands
+# Docker dev commands (named volumes)
 dev:
 	docker compose up
 
@@ -90,6 +98,33 @@ dev-logs:
 
 dev-shell:
 	docker compose exec primeai bash
+
+# Docker dev commands (local volumes in .dev-volumes/)
+dev-local:
+	docker compose -f docker-compose.dev.yml up
+
+dev-local-build:
+	docker compose -f docker-compose.dev.yml up --build
+
+dev-local-down:
+	docker compose -f docker-compose.dev.yml down
+
+dev-local-logs:
+	docker compose -f docker-compose.dev.yml logs -f
+
+dev-local-shell:
+	docker compose -f docker-compose.dev.yml exec primeai-dev bash
+
+dev-local-clean:
+	@echo "WARNING: This will delete all data in .dev-volumes/"
+	@read -p "Are you sure? [y/N] " -n 1 -r; \
+	echo; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		rm -rf .dev-volumes/; \
+		echo "Deleted .dev-volumes/"; \
+	else \
+		echo "Cancelled"; \
+	fi
 
 # Release commands
 release:

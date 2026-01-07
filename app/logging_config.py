@@ -27,6 +27,26 @@ class RequestIDFilter(logging.Filter):
         return True
 
 
+class HealthCheckFilter(logging.Filter):
+    """Suppress access logs for successful health check endpoints.
+
+    Only filters out 200 OK responses - errors (4xx, 5xx) are still logged.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Filter out successful health check endpoint logs."""
+        message = record.getMessage()
+
+        # Only suppress successful (200) health check requests
+        health_paths = [
+            "GET /health ",
+            "GET /health/ready ",
+            "GET /health/detailed ",
+        ]
+
+        return all(not (path in message and '" 200' in message) for path in health_paths)
+
+
 def configure_json_logging(
     log_level: str = "INFO",
     use_json: bool = True,
@@ -73,6 +93,11 @@ def configure_json_logging(
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("aiohttp").setLevel(logging.WARNING)
+
+    # Filter successful health check logs from uvicorn access logger
+    uvicorn_access_logger = logging.getLogger("uvicorn.access")
+    health_check_filter = HealthCheckFilter()
+    uvicorn_access_logger.addFilter(health_check_filter)
 
 
 def get_logger(name: str) -> logging.Logger:

@@ -698,11 +698,20 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 See `make help` for all commands:
 
 ```bash
-# Docker development
+# Docker development (named volumes - production-like)
 make dev              # Start dev server
 make dev-build        # Rebuild and start
 make dev-logs         # Follow logs
 make dev-shell        # Shell into container
+make dev-down         # Stop containers
+
+# Docker development (local volumes - easy inspection)
+make dev-local        # Start with local mounts in .dev-volumes/
+make dev-local-build  # Rebuild and start with local mounts
+make dev-local-logs   # Follow logs
+make dev-local-shell  # Shell into container
+make dev-local-down   # Stop containers
+make dev-local-clean  # Remove .dev-volumes/ directory
 
 # Code quality
 make lint             # Run ruff linter
@@ -713,7 +722,6 @@ make test             # Run tests
 make check            # Run all checks
 
 # Cleanup
-make dev-down         # Stop containers
 make clean            # Remove cache files
 ```
 

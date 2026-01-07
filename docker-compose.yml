@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   primeai:
     build:
@@ -12,7 +10,7 @@ services:
       - vault:/vault
       - primeai-claude:/home/prime/.claude
       - primeai-data:/data
-      - ./config.yaml:/app/config.yaml:ro
+      - ./config.default.yaml:/app/config.yaml:ro
     environment:
       # Configuration file location (required)
       - CONFIG_PATH=/app/config.yaml
@@ -31,7 +29,7 @@ services:
           "CMD",
           "bash",
           "-c",
-          "cd /app && uv run python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\"",
+          'cd /app && uv run python -c "import urllib.request; urllib.request.urlopen(''http://localhost:8000/health'')"',
         ]
       interval: 30s
       timeout: 10s

@@ -13,6 +13,7 @@
 # Required environment variables:
 # - ANTHROPIC_API_KEY=sk-ant-xxxxx
 # - AUTH_TOKEN=dev-token-12345
+environment: development
 
 vault:
   path: /vault
