@@ -38,15 +38,19 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         # Set in context
         set_request_id(request_id)
 
+        # Skip logging for health check endpoints to reduce noise
+        should_log = not request.url.path.startswith("/health")
+
         # Log request start
-        logger.info(
-            "Request started",
-            extra={
-                "request_id": request_id,
-                "method": request.method,
-                "path": request.url.path,
-            },
-        )
+        if should_log:
+            logger.info(
+                "Request started",
+                extra={
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                },
+            )
 
         try:
             # Process request
@@ -56,13 +60,14 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
             response.headers["X-Request-ID"] = request_id
 
             # Log request completion
-            logger.info(
-                "Request completed",
-                extra={
-                    "request_id": request_id,
-                    "status_code": response.status_code,
-                },
-            )
+            if should_log:
+                logger.info(
+                    "Request completed",
+                    extra={
+                        "request_id": request_id,
+                        "status_code": response.status_code,
+                    },
+                )
 
             return response
         finally:
