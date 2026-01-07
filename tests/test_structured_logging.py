@@ -9,20 +9,20 @@ from io import StringIO
 import pytest
 
 try:
-    from pythonjsonlogger import jsonlogger
+    from app.utils import json_formatter
 except ImportError:
-    jsonlogger = None  # type: ignore
+    json_formatter = None  # type: ignore
 
 
 @pytest.fixture
 def json_log_handler() -> tuple[StringIO, logging.StreamHandler]:
     """Capture JSON logs for testing."""
-    if jsonlogger is None:
-        pytest.skip("python-json-logger not installed")
+    if json_formatter is None:
+        pytest.skip("json_formatter not installed")
 
     log_stream = StringIO()
     handler = logging.StreamHandler(log_stream)
-    formatter = jsonlogger.JsonFormatter(timestamp=True)
+    formatter = json_formatter.JsonFormatter(timestamp=True)
     handler.setFormatter(formatter)
 
     return log_stream, handler

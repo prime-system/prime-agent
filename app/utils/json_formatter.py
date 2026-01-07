@@ -1,11 +1,19 @@
-"""Minimal JSON logger compatible with tests and app expectations."""
+"""Custom JSON formatter for structured logging.
+
+This module provides a custom JSON formatter compatible with python-json-logger's API
+but with repo-specific behavior including:
+- Safe handling of extra fields (allows overriding 'message' and 'asctime')
+- ISO 8601 timestamps with 'Z' suffix
+- Field renaming support
+- Filtering of standard logging fields from output
+"""
 
 from __future__ import annotations
 
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 _STANDARD_RECORD_FIELDS = {
     "name",
@@ -51,7 +59,9 @@ def _safe_make_record(
 ) -> logging.LogRecord:
     """Allow extra fields to override `message`/`asctime` without KeyError."""
     if extra is None:
-        return _original_make_record(self, name, level, fn, lno, msg, args, exc_info, func, None, sinfo)
+        return _original_make_record(
+            self, name, level, fn, lno, msg, args, exc_info, func, None, sinfo
+        )
 
     extra_copy = dict(extra)
     message_override = extra_copy.pop("message", None)
@@ -89,7 +99,7 @@ class JsonFormatter(logging.Formatter):
         self,
         fmt: str | None = None,
         datefmt: str | None = None,
-        style: str = "%",
+        style: Literal["%", "{", "$"] = "%",
         *,
         rename_fields: dict[str, str] | None = None,
         timestamp: bool = False,
@@ -103,7 +113,7 @@ class JsonFormatter(logging.Formatter):
         self.json_default = json_default
         self.json_encoder = json_encoder
 
-    def format(self, record: logging.LogRecord) -> str:  # noqa: A003 - match logging API
+    def format(self, record: logging.LogRecord) -> str:
         extra_message = record.__dict__.get("message")
         if extra_message is not None and extra_message != record.msg:
             message = extra_message
@@ -117,7 +127,7 @@ class JsonFormatter(logging.Formatter):
         }
 
         if self.timestamp:
-            timestamp = datetime.fromtimestamp(record.created, tz=timezone.utc)
+            timestamp = datetime.fromtimestamp(record.created, tz=timezone.utc)  # noqa: UP017
             payload["timestamp"] = timestamp.isoformat().replace("+00:00", "Z")
 
         for key, value in record.__dict__.items():

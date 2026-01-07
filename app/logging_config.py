@@ -4,16 +4,11 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Any
 
-_jsonlogger: Any | None
 try:
-    from pythonjsonlogger import jsonlogger as _jsonlogger
+    from app.utils.json_formatter import JsonFormatter
 except ImportError:
-    _jsonlogger = None
-
-jsonlogger: Any | None = _jsonlogger
-JsonFormatter: Any = getattr(jsonlogger, "JsonFormatter", None)
+    JsonFormatter = None  # type: ignore[misc,assignment]
 
 
 class RequestIDFilter(logging.Filter):

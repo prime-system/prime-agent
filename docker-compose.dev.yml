@@ -14,25 +14,20 @@ services:
     container_name: primeai-dev
     ports:
       - "8000:8000"
+    env_file:
+      - ./.dev-volumes/.env
     volumes:
       # Mount local directories from .dev-volumes/ for easy inspection
       - ./.dev-volumes/vault:/vault
       - ./.dev-volumes/claude:/home/prime/.claude
       - ./.dev-volumes/data:/data
-      - ./config.yaml:/app/config.yaml:ro
+      - ./.dev-volumes/config.yaml:/app/config.yaml:ro
       # Optional: mount source code for live development (uncomment if needed)
       # - ./app:/app/app:ro
     environment:
       # Configuration file location (required)
       - CONFIG_PATH=/app/config.yaml
-      # Secrets (referenced in config.yaml as ${VAR_NAME})
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
-      - AUTH_TOKEN=${AUTH_TOKEN}
-      # Git secrets (optional, only needed if git.enabled=true in config.yaml)
-      - GIT_SSH_KEY=${GIT_SSH_KEY:-}
-      - GIT_USERNAME=${GIT_USERNAME:-}
-      - GIT_TOKEN=${GIT_TOKEN:-}
+      # All other secrets loaded from .dev-volumes/.env via env_file directive above
     restart: unless-stopped
     healthcheck:
       test:

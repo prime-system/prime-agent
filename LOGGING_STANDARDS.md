@@ -217,12 +217,12 @@ When testing, capture JSON logs:
 import json
 import logging
 from io import StringIO
-from pythonjsonlogger import jsonlogger
+from app.utils import json_formatter
 
 # Capture logs
 log_stream = StringIO()
 handler = logging.StreamHandler(log_stream)
-handler.setFormatter(jsonlogger.JsonFormatter())
+handler.setFormatter(json_formatter.JsonFormatter())
 logger = logging.getLogger("test")
 logger.addHandler(handler)
 
