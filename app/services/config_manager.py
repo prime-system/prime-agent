@@ -93,7 +93,7 @@ class ConfigManager:
             # No event loop running (sync context) - skip lock
             return None
 
-    def _load_config(self) -> None:  # noqa: PLR0911
+    def _load_config(self) -> None:
         """
         Load configuration from YAML file with atomic operations.
 
@@ -316,15 +316,15 @@ class ConfigManager:
         Check if config file has been modified, created, or deleted since last load.
 
         To prevent TOCTOU race conditions:
-        1. We only check existence here (lightweight)
-        2. We verify mtime atomically in _load_config after reading contents
-        3. If file exists but mtime didn't change, _load_config skips reload
+        1. We check both existence and mtime here
+        2. We verify mtime again atomically in _load_config after reading contents
+        3. If mtime didn't change, return False immediately (no reload needed)
 
         Handles these scenarios:
-        - File exists and we have last_mtime → attempt reload, _load_config verifies
+        - File exists and mtime changed → True (reload)
+        - File exists but mtime unchanged → False (no reload)
         - File created at runtime → True (reload)
         - File deleted/missing → False (keep using last valid config)
-        - File unchanged → _load_config will skip if mtime unchanged
 
         Returns:
             True if we should attempt to reload, False otherwise
@@ -336,9 +336,15 @@ class ConfigManager:
             return False
 
         # Case 1: File was loaded before and still exists
-        # Return True to trigger reload, but _load_config will verify mtime changed
+        # Check if mtime has changed before triggering reload
         if self._last_mtime is not None and file_exists:
-            return True
+            try:
+                current_mtime = self.config_path.stat().st_mtime
+                # Only reload if mtime actually changed
+                return current_mtime != self._last_mtime
+            except OSError:
+                # If we can't stat the file, don't try to reload
+                return False
 
         # Case 2: File didn't exist before and now exists (created at runtime)
         if self._last_mtime is None and file_exists:

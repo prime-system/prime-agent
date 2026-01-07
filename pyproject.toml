@@ -118,6 +118,7 @@ ignore = [
     "PLW0603", # global statement (needed for FastAPI dependency injection pattern)
     "B008",   # function call in argument defaults (FastAPI Depends pattern)
     "ARG001", # unused function arguments (needed for FastAPI/interface signatures)
+    "PLR0911", # too many return statements
     "PLR0912", # too many branches
     "PLR0915", # too many statements
     "PTH123", # open() vs Path.open() (both are acceptable)
