@@ -32,6 +32,9 @@ async def register_device(
 
     Called by PrimeMobileApp after it creates a binding with PrimePushRelay.
     The app passes the push_url (capability URL) to store.
+
+    For existing devices, push_url is optional (updates device name only).
+    For new devices, push_url is required.
     """
     try:
         # Store device with push_url in registry
@@ -49,6 +52,20 @@ async def register_device(
         )
 
         return PushResponse(success=True, message="Device registered successfully")
+
+    except ValueError as e:
+        # Missing push_url for new device registration
+        logger.warning(
+            "Device registration validation failed",
+            extra={
+                "installation_id": request.installation_id,
+                "error": str(e),
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
 
     except Exception as e:
         logger.exception(

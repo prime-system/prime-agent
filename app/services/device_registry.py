@@ -143,7 +143,7 @@ async def add_or_update_device(
     installation_id: str,
     device_name: str | None,
     device_type: Literal["iphone", "ipad", "mac"],
-    push_url: str,
+    push_url: str | None = None,
 ) -> None:
     """
     Add new device or update existing one.
@@ -156,7 +156,10 @@ async def add_or_update_device(
         installation_id: UUID from app (primary key)
         device_name: Optional device name
         device_type: Device type
-        push_url: Capability URL from PrimePushRelay
+        push_url: Capability URL from PrimePushRelay (required for new devices, optional for updates)
+
+    Raises:
+        ValueError: If push_url is None for new device registration
     """
     sanitized_name = sanitize_device_name(device_name)
     now = datetime.now(UTC).isoformat()
@@ -176,14 +179,26 @@ async def add_or_update_device(
             existing.last_seen = now
             existing.device_name = sanitized_name
             existing.device_type = device_type
-            existing.push_url = push_url
+
+            # Only update push_url if provided (preserves existing value if None)
+            push_url_updated = False
+            if push_url is not None:
+                existing.push_url = push_url
+                push_url_updated = True
+
             logger.info(
-                "Device updated: id=%s, type=%s, name=%s",
+                "Device updated: id=%s, type=%s, name=%s, push_url_updated=%s",
                 installation_id,
                 device_type,
                 sanitized_name,
+                push_url_updated,
             )
         else:
+            # New device registration - push_url is required
+            if push_url is None:
+                msg = "push_url is required for new device registration"
+                raise ValueError(msg)
+
             # Add new entry
             new_device = Device(
                 installation_id=installation_id,

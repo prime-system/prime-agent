@@ -267,6 +267,55 @@ class TestAddOrUpdateDevice:
         assert data["devices"][0]["last_seen"] != original_registered_at
 
     @pytest.mark.asyncio
+    async def test_update_device_name_only(self, tmp_path: Path):
+        """Update device name without changing push_url."""
+        devices_file = tmp_path / "devices.json"
+        installation_id = "550e8400-e29b-41d4-a716-446655440010"
+        original_push_url = "https://example.com/push/original"
+
+        # Add initial device
+        await add_or_update_device(
+            devices_file=devices_file,
+            installation_id=installation_id,
+            device_name="old-name",
+            device_type="iphone",
+            push_url=original_push_url,
+        )
+
+        # Update only device name (push_url=None)
+        await add_or_update_device(
+            devices_file=devices_file,
+            installation_id=installation_id,
+            device_name="new-name",
+            device_type="iphone",
+            push_url=None,
+        )
+
+        data = json.loads(devices_file.read_text())
+        assert len(data["devices"]) == 1
+        assert data["devices"][0]["device_name"] == "new-name"
+        assert data["devices"][0]["push_url"] == original_push_url  # Preserved
+
+    @pytest.mark.asyncio
+    async def test_new_device_requires_push_url(self, tmp_path: Path):
+        """Raise ValueError when creating new device without push_url."""
+        devices_file = tmp_path / "devices.json"
+        installation_id = "550e8400-e29b-41d4-a716-446655440011"
+
+        # Attempt to add new device without push_url
+        with pytest.raises(ValueError, match="push_url is required"):
+            await add_or_update_device(
+                devices_file=devices_file,
+                installation_id=installation_id,
+                device_name="test",
+                device_type="iphone",
+                push_url=None,
+            )
+
+        # Verify device was not created
+        assert not devices_file.exists()
+
+    @pytest.mark.asyncio
     async def test_add_multiple_devices(self, tmp_path: Path):
         """Add multiple different devices."""
         devices_file = tmp_path / "devices.json"
