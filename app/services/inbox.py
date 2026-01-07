@@ -76,9 +76,7 @@ class InboxService:
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(content)
 
-    def get_unprocessed_dumps(
-        self, vault_path: Path, inbox_folder: str
-    ) -> list[dict[str, Any]]:
+    def get_unprocessed_dumps(self, vault_path: Path, inbox_folder: str) -> list[dict[str, Any]]:
         """
         Scan configured inbox folder for files without processed: true.
 
@@ -111,6 +109,7 @@ class InboxService:
                     "processed: true",  # Pattern to NOT match
                     str(inbox_dir),
                 ],
+                check=False,
                 capture_output=True,
                 text=True,
             )

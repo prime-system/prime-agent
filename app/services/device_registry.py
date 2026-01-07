@@ -7,13 +7,10 @@ import json
 import logging
 import re
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from pathlib import Path  # noqa: TC003
+from typing import Literal
 
 from pydantic import BaseModel
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 

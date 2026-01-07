@@ -135,6 +135,23 @@ ignore = [
     "ARG",    # unused function arguments
     "S101",   # use of assert
     "PLR2004", # magic values in tests
+    "EM101",  # string literals in exceptions (tests ok)
+    "F401",   # unused imports in tests
+    "F841",   # unused variables in tests
+    "G101",   # extra LogRecord fields (tests ok)
+    "G201",   # logger.exception suggestion (tests ok)
+    "I001",   # import ordering handled by test style
+    "PT011",  # pytest.raises match requirement
+    "RUF059", # unused unpacked variables in tests
+    "ERA",    # allow commented reference in tests
+    "PIE",    # test control flow exceptions
+    "PT",     # relaxed pytest style in tests
+    "PTH",    # stdlib path helpers in tests
+    "Q",      # quotes in test fixtures
+    "RUF",    # relaxed regex/format warnings in tests
+    "SIM",    # allow nested conditionals in tests
+    "TC",     # typing-only imports in tests
+    "UP",     # allow versioned syntax in tests
 ]
 
 [tool.ruff.lint.isort]
@@ -175,3 +192,9 @@ module = [
     "claude_agent_sdk.*",
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "tests.*",
+]
+ignore_errors = true

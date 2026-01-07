@@ -209,11 +209,10 @@ async def sync_changes(
                 success=True,
                 message="Successfully synced all changes",
             )
-        else:
-            return GitOperationResponse(
-                success=False,
-                message="Sync failed - check logs for details",
-            )
+        return GitOperationResponse(
+            success=False,
+            message="Sync failed - check logs for details",
+        )
     except Exception as e:
         logger.error(f"Git sync failed: {e}")
         raise HTTPException(

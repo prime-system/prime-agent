@@ -2,7 +2,7 @@
 
 import logging
 import mimetypes
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -68,9 +68,7 @@ def validate_safe_path(path_str: str, vault_path: Path) -> Path:
 
     # Reject paths with .. components (path traversal)
     if ".." in Path(path_str).parts:
-        raise HTTPException(
-            status_code=400, detail="Path traversal (..) not allowed"
-        )
+        raise HTTPException(status_code=400, detail="Path traversal (..) not allowed")
 
     # Resolve the full path
     full_path = (vault_path / path_str).resolve()
@@ -79,9 +77,7 @@ def validate_safe_path(path_str: str, vault_path: Path) -> Path:
     try:
         full_path.relative_to(vault_path.resolve())
     except ValueError as err:
-        raise HTTPException(
-            status_code=403, detail="Access denied: path outside vault"
-        ) from err
+        raise HTTPException(status_code=403, detail="Access denied: path outside vault") from err
 
     return full_path
 
@@ -166,9 +162,7 @@ async def get_file_content(
     lines: Annotated[
         int | None, Query(description="Max lines to return (default: all)", ge=1)
     ] = None,
-    offset: Annotated[
-        int | None, Query(description="Line offset for pagination", ge=0)
-    ] = 0,
+    offset: Annotated[int | None, Query(description="Line offset for pagination", ge=0)] = 0,
     vault_service: VaultService = Depends(get_vault_service),
 ) -> FileContentResponse:
     """
@@ -192,9 +186,7 @@ async def get_file_content(
 
     # Check if binary
     if is_binary_file(full_path):
-        raise HTTPException(
-            status_code=400, detail="Binary file preview not supported"
-        )
+        raise HTTPException(status_code=400, detail="Binary file preview not supported")
 
     # Read file content
     try:
@@ -224,7 +216,7 @@ async def get_file_content(
 
     # Get file stats
     stat = full_path.stat()
-    modified_at = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
+    modified_at = datetime.fromtimestamp(stat.st_mtime, tz=UTC)
 
     # Detect language
     language = detect_language(full_path)

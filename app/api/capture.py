@@ -90,7 +90,7 @@ async def capture(
             },
         )
     except (OSError, InboxError, VaultError) as e:
-        logger.error(
+        logger.exception(
             "Failed to write capture file",
             extra={
                 "dump_id": dump_id,
@@ -98,7 +98,6 @@ async def capture(
                 "error_type": type(e).__name__,
                 "path": str(inbox_file),
             },
-            exc_info=True,
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

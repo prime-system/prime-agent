@@ -25,9 +25,9 @@ class AgentSessionState:
 
     session_id: str
     client: ClaudeSDKClient
-    processing_task: asyncio.Task
-    input_queue: asyncio.Queue
-    message_buffer: deque = field(default_factory=lambda: deque(maxlen=100))
+    processing_task: asyncio.Task[None]
+    input_queue: asyncio.Queue[str]
+    message_buffer: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=100))
     last_activity: datetime = field(default_factory=lambda: datetime.now(UTC))
     connected_ws_id: str | None = None
     is_processing: bool = False
@@ -58,7 +58,7 @@ class AgentSessionManager:
         self.agent_service = agent_service
         self.sessions: dict[str, AgentSessionState] = {}
         self._lock = asyncio.Lock()
-        self._cleanup_task: asyncio.Task | None = None
+        self._cleanup_task: asyncio.Task[None] | None = None
 
     async def get_or_create_session(self, session_id: str | None) -> AgentSessionState:
         """
@@ -85,7 +85,7 @@ class AgentSessionManager:
             client = self.agent_service.create_client_instance(session_id=session_id)
 
             # Create state
-            input_queue: asyncio.Queue = asyncio.Queue()
+            input_queue: asyncio.Queue[str] = asyncio.Queue()
             processing_task = asyncio.create_task(
                 self._process_session_loop(session_id or "new", input_queue, client)
             )
@@ -109,7 +109,7 @@ class AgentSessionManager:
         session_id: str,
         ws_id: str,
         connection_manager: Any,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """
         Attach WebSocket to session, kicking previous client if exists.
 
@@ -148,7 +148,12 @@ class AgentSessionManager:
             buffered = list(state.message_buffer)
             state.message_buffer.clear()
 
-            logger.info("Attached WebSocket %s to session %s (buffered: %d)", ws_id, session_id, len(buffered))
+            logger.info(
+                "Attached WebSocket %s to session %s (buffered: %d)",
+                ws_id,
+                session_id,
+                len(buffered),
+            )
             return buffered
 
     async def detach_websocket(self, session_id: str, ws_id: str) -> None:
@@ -242,7 +247,7 @@ class AgentSessionManager:
     async def _process_session_loop(
         self,
         initial_session_id: str,
-        input_queue: asyncio.Queue,
+        input_queue: asyncio.Queue[str],
         client: ClaudeSDKClient,
     ) -> None:
         """
@@ -303,7 +308,9 @@ class AgentSessionManager:
                             # Import here to avoid circular dependency
                             from app.api.chat import connection_manager
 
-                            success = await connection_manager.send_message(state.connected_ws_id, event)
+                            success = await connection_manager.send_message(
+                                state.connected_ws_id, event
+                            )
                             if not success:
                                 logger.warning("Failed to send to WS, buffering")
                                 state.message_buffer.append(event)
@@ -312,19 +319,18 @@ class AgentSessionManager:
                             state.message_buffer.append(event)
 
                     # Check for completion and early termination
-                    if event.get("type") == "complete":
-                        if state and state.connected_ws_id is None:
-                            logger.info(
-                                "Response complete with no client, waiting %ds before termination",
-                                self.GRACE_PERIOD_SECONDS,
-                            )
-                            await asyncio.sleep(self.GRACE_PERIOD_SECONDS)
+                    if event.get("type") == "complete" and state and state.connected_ws_id is None:
+                        logger.info(
+                            "Response complete with no client, waiting %ds before termination",
+                            self.GRACE_PERIOD_SECONDS,
+                        )
+                        await asyncio.sleep(self.GRACE_PERIOD_SECONDS)
 
-                            # Double-check still disconnected
-                            if state.connected_ws_id is None:
-                                logger.info("Terminating idle completed session %s", session_id)
-                                await self.terminate_session(session_id)
-                                return
+                        # Double-check still disconnected
+                        if state.connected_ws_id is None:
+                            logger.info("Terminating idle completed session %s", session_id)
+                            await self.terminate_session(session_id)
+                            return
 
                 if state:
                     state.is_processing = False

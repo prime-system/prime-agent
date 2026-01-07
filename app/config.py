@@ -4,9 +4,10 @@ import logging
 import os
 import re
 from pathlib import Path
+from typing import Any, cast
 
 import yaml
-from pydantic import Field, ValidationError, field_validator
+from pydantic import Field, ValidationError, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ def expand_env_vars(config_str: str) -> str:
     Raises:
         KeyError: If a referenced environment variable is not set
     """
+
     def replace_var(match: re.Match[str]) -> str:
         var_name = match.group(1)
         try:
@@ -36,18 +38,18 @@ def expand_env_vars(config_str: str) -> str:
 
     # Process line by line to skip YAML comments
     lines = []
-    for line in config_str.split('\n'):
+    for line in config_str.split("\n"):
         # Skip expansion in comment lines (first non-whitespace char is #)
         stripped = line.lstrip()
-        if stripped.startswith('#'):
+        if stripped.startswith("#"):
             lines.append(line)
         else:
             lines.append(re.sub(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", replace_var, line))
 
-    return '\n'.join(lines)
+    return "\n".join(lines)
 
 
-def load_config_from_yaml(config_path: str | None = None) -> dict:
+def load_config_from_yaml(config_path: str | None = None) -> dict[str, Any]:
     """
     Load YAML configuration file and expand environment variables.
 
@@ -164,12 +166,8 @@ class Settings(BaseSettings):
     # CORS configuration (auto-derived from base_url, no explicit config needed)
     cors_enabled: bool = True
     cors_allowed_origins: list[str] = Field(default=[])
-    cors_allowed_methods: list[str] = Field(
-        default=["POST", "GET", "OPTIONS"]
-    )
-    cors_allowed_headers: list[str] = Field(
-        default=["Authorization", "Content-Type"]
-    )
+    cors_allowed_methods: list[str] = Field(default=["POST", "GET", "OPTIONS"])
+    cors_allowed_headers: list[str] = Field(default=["Authorization", "Content-Type"])
 
     # Agent configuration
     anthropic_api_key: str  # Required for Claude Agent SDK
@@ -199,7 +197,7 @@ class Settings(BaseSettings):
 
     @field_validator("vault_repo_url", mode="after")
     @classmethod
-    def validate_vault_repo_url(cls, v: str | None, info) -> str | None:
+    def validate_vault_repo_url(cls, v: str | None, info: ValidationInfo) -> str | None:
         """Validate that git.repo_url is set when git.enabled=true."""
         if info.data.get("git_enabled") and not v:
             msg = "git.enabled=true requires git.repo_url to be set in config.yaml"
@@ -249,9 +247,13 @@ def _build_settings_from_yaml() -> Settings:
 
     # Flatten nested YAML structure to environment variable format
     # config.yaml uses nested structure, but Pydantic expects flat env vars
-    flat_config = {}
+    flat_config: dict[str, Any] = {}
 
-    if "vault" in config_dict and isinstance(config_dict["vault"], dict) and "path" in config_dict["vault"]:
+    if (
+        "vault" in config_dict
+        and isinstance(config_dict["vault"], dict)
+        and "path" in config_dict["vault"]
+    ):
         flat_config["vault_path"] = config_dict["vault"]["path"]
 
     if "workspace" in config_dict and isinstance(config_dict["workspace"], dict):
@@ -321,7 +323,7 @@ def _build_settings_from_yaml() -> Settings:
 
 
 # Initialize global config manager for dynamic reloading
-from app.services.config_manager import ConfigManager
+from app.services.config_manager import ConfigManager  # noqa: E402
 
 
 class _SettingsProxy:
@@ -336,7 +338,7 @@ class _SettingsProxy:
     def __init__(self, config_manager: ConfigManager):
         object.__setattr__(self, "_config_manager", config_manager)
 
-    def __getattr__(self, name: str) -> object:
+    def __getattr__(self, name: str) -> Any:
         """Get attribute from current settings, reloading if necessary."""
         config_manager = object.__getattribute__(self, "_config_manager")
         current_settings = config_manager.get_settings()
@@ -352,7 +354,7 @@ class _SettingsProxy:
 
 
 _config_manager = ConfigManager()
-settings = _SettingsProxy(_config_manager)  # type: ignore[assignment]
+settings = cast("Settings", _SettingsProxy(_config_manager))
 
 
 def get_config_manager() -> ConfigManager:

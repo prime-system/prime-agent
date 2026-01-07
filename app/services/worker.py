@@ -133,6 +133,7 @@ class AgentWorker:
         # Set processing flag
         AgentWorker._processing = True
         start_time = time.time()
+        duration_seconds: float = 0.0
         logger.info("Starting agent processing")
 
         try:
@@ -162,7 +163,7 @@ class AgentWorker:
                 duration_seconds = time.time() - start_time
 
                 # Create audit log
-                log_file = self.log_service.create_run_log(
+                self.log_service.create_run_log(
                     duration_seconds=duration_seconds,
                     cost_usd=result.get("cost_usd"),
                     error=result.get("error"),
@@ -175,7 +176,9 @@ class AgentWorker:
                 if result.get("success"):
                     if self.git_service.enabled and changed_files:
                         try:
-                            commit_msg = f"Process: inbox dumps ({len(changed_files)} files changed)"
+                            commit_msg = (
+                                f"Process: inbox dumps ({len(changed_files)} files changed)"
+                            )
                             self.git_service.commit_and_push(commit_msg, changed_files)
                             logger.info(
                                 "Processing committed to git",
@@ -193,11 +196,13 @@ class AgentWorker:
                                 },
                             )
                             # Log is already created locally, not critical
+                    cost_usd = result.get("cost_usd")
+                    cost_usd_value = cost_usd if cost_usd is not None else 0.0
                     logger.info(
                         "Processing completed successfully",
                         extra={
                             "duration_seconds": round(duration_seconds, 2),
-                            "cost_usd": round(result.get("cost_usd", 0), 4),
+                            "cost_usd": round(cost_usd_value, 4),
                         },
                     )
                 else:
@@ -235,7 +240,7 @@ class AgentWorker:
             )
             # Try to create error log if possible
             try:
-                log_file = self.log_service.create_run_log(
+                self.log_service.create_run_log(
                     duration_seconds=duration_seconds,
                     error=f"Unexpected exception: {e!s}",
                 )

@@ -13,7 +13,6 @@ from app.models.command import (
     CommandListResponse,
     CommandType,
 )
-from app.models.frontmatter import CommandFrontmatter
 from app.utils.frontmatter import parse_and_validate_command
 
 logger = logging.getLogger(__name__)
@@ -43,8 +42,9 @@ class CommandService:
             VaultError: If vault is inaccessible
         """
         if not self.vault_path.exists():
+            msg = "Vault path does not exist"
             raise VaultError(
-                "Vault path does not exist",
+                msg,
                 context={"vault_path": str(self.vault_path)},
             )
 
@@ -52,9 +52,7 @@ class CommandService:
 
         # Scan vault commands
         if self.commands_dir.exists():
-            vault_commands = self._scan_directory(
-                self.commands_dir, CommandType.VAULT
-            )
+            vault_commands = self._scan_directory(self.commands_dir, CommandType.VAULT)
             commands.extend(vault_commands)
             logger.info(
                 "Scanned vault commands",
@@ -91,8 +89,9 @@ class CommandService:
             VaultError: If vault is inaccessible or command file cannot be read
         """
         if not self.vault_path.exists():
+            msg = "Vault path does not exist"
             raise VaultError(
-                "Vault path does not exist",
+                msg,
                 context={"vault_path": str(self.vault_path)},
             )
 
@@ -128,19 +127,13 @@ class CommandService:
             for item in directory.iterdir():
                 if item.is_dir():
                     # Recursively scan subdirectories with namespace
-                    subdir_namespace = (
-                        f"{namespace}:{item.name}" if namespace else item.name
-                    )
-                    subcommands = self._scan_directory(
-                        item, command_type, subdir_namespace
-                    )
+                    subdir_namespace = f"{namespace}:{item.name}" if namespace else item.name
+                    subcommands = self._scan_directory(item, command_type, subdir_namespace)
                     commands.extend(subcommands)
                 elif item.suffix == ".md":
                     # Parse command file
                     try:
-                        command_info = self._parse_command_info(
-                            item, command_type, namespace
-                        )
+                        command_info = self._parse_command_info(item, command_type, namespace)
                         commands.append(command_info)
                     except Exception as e:
                         logger.warning(
@@ -160,8 +153,9 @@ class CommandService:
                     "error": str(e),
                 },
             )
+            msg = "Permission denied accessing commands directory"
             raise VaultError(
-                "Permission denied accessing commands directory",
+                msg,
                 context={"directory": str(directory)},
             ) from e
 
@@ -214,14 +208,13 @@ class CommandService:
                     "error": str(e),
                 },
             )
+            msg = "Failed to read command file"
             raise VaultError(
-                "Failed to read command file",
+                msg,
                 context={"file": str(file_path)},
             ) from e
 
-    def _parse_command_detail(
-        self, file_path: Path, command_type: CommandType
-    ) -> CommandDetail:
+    def _parse_command_detail(self, file_path: Path, command_type: CommandType) -> CommandDetail:
         """
         Parse detailed command information including analysis of content.
 
@@ -243,9 +236,7 @@ class CommandService:
             commands_dir = self.vault_path / ".claude" / "commands"
             relative_to_commands = file_path.relative_to(commands_dir)
             namespace = (
-                str(relative_to_commands.parent)
-                if relative_to_commands.parent != Path(".")
-                else None
+                str(relative_to_commands.parent) if relative_to_commands.parent != Path() else None
             )
 
             # Parse command info
@@ -274,8 +265,9 @@ class CommandService:
                     "error": str(e),
                 },
             )
+            msg = "Failed to read command file"
             raise VaultError(
-                "Failed to read command file",
+                msg,
                 context={"file": str(file_path)},
             ) from e
 

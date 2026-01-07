@@ -81,7 +81,9 @@ async def test_git_health_check_enabled(temp_vault, mock_git_service) -> None:
 async def test_git_health_check_degraded(temp_vault, mock_git_service) -> None:
     """Test git health check when git check fails."""
     mock_git_service.enabled = True
-    mock_git_service.get_changed_files = lambda: (_ for _ in ()).throw(RuntimeError("Git check failed"))
+    mock_git_service.get_changed_files = lambda: (_ for _ in ()).throw(
+        RuntimeError("Git check failed")
+    )
 
     vault_service = VaultService(str(temp_vault))
     health_service = HealthCheckService(
@@ -96,22 +98,6 @@ async def test_git_health_check_degraded(temp_vault, mock_git_service) -> None:
 
 
 @pytest.mark.asyncio
-async def test_apn_health_check_disabled(temp_vault) -> None:
-    """Test APNs health check when APNs is disabled."""
-    vault_service = VaultService(str(temp_vault))
-    health_service = HealthCheckService(
-        vault_service=vault_service,
-        apn_service=None,
-    )
-
-    apn_health = await health_service.check_apn_health()
-
-    assert apn_health.name == "apns"
-    assert apn_health.status == HealthStatus.HEALTHY
-    assert apn_health.message == "APNs disabled"
-
-
-@pytest.mark.asyncio
 async def test_overall_health_check_all_healthy(temp_vault, mock_git_service) -> None:
     """Test overall health check when all services are healthy."""
     mock_git_service.enabled = False
@@ -120,7 +106,6 @@ async def test_overall_health_check_all_healthy(temp_vault, mock_git_service) ->
     health_service = HealthCheckService(
         vault_service=vault_service,
         git_service=mock_git_service,
-        apn_service=None,
         version="1.0.0",
     )
 
@@ -128,7 +113,7 @@ async def test_overall_health_check_all_healthy(temp_vault, mock_git_service) ->
 
     assert health.status == HealthStatus.HEALTHY
     assert health.version == "1.0.0"
-    assert len(health.services) == 3
+    assert len(health.services) == 2
     assert all(s.status == HealthStatus.HEALTHY for s in health.services)
     assert health.is_ready() is True
 
@@ -143,7 +128,6 @@ async def test_overall_health_check_degraded(temp_vault, mock_git_service) -> No
     health_service = HealthCheckService(
         vault_service=vault_service,
         git_service=mock_git_service,
-        apn_service=None,
     )
 
     health = await health_service.check_health()
@@ -159,7 +143,6 @@ async def test_overall_health_check_unhealthy(temp_vault, mock_git_service) -> N
     health_service = HealthCheckService(
         vault_service=vault_service,
         git_service=mock_git_service,
-        apn_service=None,
     )
 
     health = await health_service.check_health()

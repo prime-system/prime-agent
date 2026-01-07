@@ -38,14 +38,46 @@ def temp_vault():
 
 
 @pytest.fixture
-def client(temp_vault, test_app, mock_settings):
+def client(temp_vault, test_app, mock_settings, auth_headers, monkeypatch):
     """Test client with vault service and settings initialized."""
     from app.api import config
+    from app.services.agent_identity import AgentIdentityService
+    from app.services.container import init_container
+    from app.services.health import HealthCheckService
+    from app.services.inbox import InboxService
+    from app.services.command import CommandService
+    from app.services.logs import LogService
+    from app.services.relay_client import PrimePushRelayClient
     from app.services.vault import VaultService
 
     vault_service = VaultService(str(temp_vault))
     vault_service.ensure_structure()
-    config.init_services(vault_service, mock_settings)
+    health_service = HealthCheckService(vault_service=vault_service)
+    relay_client = MagicMock(spec=PrimePushRelayClient)
+    command_service = CommandService(str(vault_service.vault_path))
+    agent_identity_service = MagicMock(spec=AgentIdentityService)
+    agent_identity_service.get_cached_identity.return_value = "agent-123"
+
+    init_container(
+        vault_service=vault_service,
+        git_service=MagicMock(),
+        inbox_service=InboxService(),
+        agent_service=MagicMock(),
+        log_service=LogService(
+            logs_dir=vault_service.logs_path(), vault_path=vault_service.vault_path
+        ),
+        chat_session_manager=MagicMock(),
+        agent_chat_service=MagicMock(),
+        agent_session_manager=MagicMock(),
+        relay_client=relay_client,
+        claude_session_api=MagicMock(),
+        health_service=health_service,
+        command_service=command_service,
+        agent_identity_service=agent_identity_service,
+    )
+
+    # Patch settings used by config endpoint
+    monkeypatch.setattr(config, "settings", mock_settings)
 
     with TestClient(test_app) as c:
         yield c
@@ -56,7 +88,7 @@ class TestConfigEndpoint:
 
     def test_config_endpoint_returns_correct_structure(self, client):
         """Test that config endpoint returns the expected JSON structure."""
-        response = client.get("/api/v1/config")
+        response = client.get("/api/v1/config", headers={"Authorization": "Bearer test-token-123"})
         assert response.status_code == 200
 
         data = response.json()
@@ -82,7 +114,7 @@ class TestConfigEndpoint:
         """Test config when git is enabled in settings."""
         mock_settings.git_enabled = True
 
-        response = client.get("/api/v1/config")
+        response = client.get("/api/v1/config", headers={"Authorization": "Bearer test-token-123"})
         assert response.status_code == 200
 
         data = response.json()
@@ -92,7 +124,7 @@ class TestConfigEndpoint:
         """Test config when git is disabled in settings."""
         mock_settings.git_enabled = False
 
-        response = client.get("/api/v1/config")
+        response = client.get("/api/v1/config", headers={"Authorization": "Bearer test-token-123"})
         assert response.status_code == 200
 
         data = response.json()
@@ -105,7 +137,7 @@ class TestConfigEndpoint:
         commands_dir.mkdir(parents=True, exist_ok=True)
         (commands_dir / "processCapture.md").write_text("# Custom prompt")
 
-        response = client.get("/api/v1/config")
+        response = client.get("/api/v1/config", headers={"Authorization": "Bearer test-token-123"})
         assert response.status_code == 200
 
         data = response.json()
@@ -118,7 +150,7 @@ class TestConfigEndpoint:
         if custom_path.exists():
             custom_path.unlink()
 
-        response = client.get("/api/v1/config")
+        response = client.get("/api/v1/config", headers={"Authorization": "Bearer test-token-123"})
         assert response.status_code == 200
 
         data = response.json()
@@ -128,7 +160,7 @@ class TestConfigEndpoint:
         """Test config when workspaces are enabled in settings."""
         mock_settings.workspaces_enabled = True
 
-        response = client.get("/api/v1/config")
+        response = client.get("/api/v1/config", headers={"Authorization": "Bearer test-token-123"})
         assert response.status_code == 200
 
         data = response.json()
@@ -138,7 +170,7 @@ class TestConfigEndpoint:
         """Test config when workspaces are disabled in settings."""
         mock_settings.workspaces_enabled = False
 
-        response = client.get("/api/v1/config")
+        response = client.get("/api/v1/config", headers={"Authorization": "Bearer test-token-123"})
         assert response.status_code == 200
 
         data = response.json()
@@ -146,17 +178,16 @@ class TestConfigEndpoint:
 
     def test_config_server_info(self, client):
         """Test server_info fields."""
-        response = client.get("/api/v1/config")
+        response = client.get("/api/v1/config", headers={"Authorization": "Bearer test-token-123"})
         assert response.status_code == 200
 
         data = response.json()
         assert data["server_info"]["name"] == "Prime"
         # Version comes from pyproject.toml
         assert data["server_info"]["version"] == "0.1.0"
+        assert data["server_info"]["prime_agent_id"] == "agent-123"
 
-    def test_config_full_scenario_all_features_enabled(
-        self, client, temp_vault, mock_settings
-    ):
+    def test_config_full_scenario_all_features_enabled(self, client, temp_vault, mock_settings):
         """Test config with all features enabled."""
         # Enable git and workspaces in settings
         mock_settings.git_enabled = True
@@ -167,7 +198,7 @@ class TestConfigEndpoint:
         commands_dir.mkdir(parents=True, exist_ok=True)
         (commands_dir / "processCapture.md").write_text("# Custom prompt")
 
-        response = client.get("/api/v1/config")
+        response = client.get("/api/v1/config", headers={"Authorization": "Bearer test-token-123"})
         assert response.status_code == 200
 
         data = response.json()
@@ -182,7 +213,7 @@ class TestConfigEndpoint:
         mock_settings.git_enabled = False
         mock_settings.workspaces_enabled = False
 
-        response = client.get("/api/v1/config")
+        response = client.get("/api/v1/config", headers={"Authorization": "Bearer test-token-123"})
         assert response.status_code == 200
 
         data = response.json()

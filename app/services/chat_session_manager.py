@@ -2,6 +2,7 @@
 
 import logging
 from pathlib import Path
+from typing import Any
 
 from app.services.claude_session_api import ClaudeSessionAPI
 
@@ -25,7 +26,7 @@ class ChatSessionManager:
         self,
         vault_path: str,
         claude_home: str = "/home/prime/.claude",
-    ):
+    ) -> None:
         """
         Initialize chat session manager.
 
@@ -60,7 +61,7 @@ class ChatSessionManager:
         self,
         session_id: str,
         roles: list[str] | None = None,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """
         Get messages from Claude Code session.
 
@@ -73,7 +74,7 @@ class ChatSessionManager:
         """
         return self.claude_api.get_session_messages(session_id, roles=roles)
 
-    def get_session_metadata(self, session_id: str) -> dict:
+    def get_session_metadata(self, session_id: str) -> dict[str, Any] | None:
         """
         Get metadata for Claude Code session.
 
@@ -85,7 +86,7 @@ class ChatSessionManager:
         """
         return self.claude_api.get_session_summary(session_id)
 
-    def list_sessions(self) -> list[dict]:
+    def list_sessions(self) -> list[dict[str, Any]]:
         """
         List all Claude Code sessions for this project.
 

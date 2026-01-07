@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import logging
 import sys
+from typing import Any
 
+_jsonlogger: Any | None
 try:
-    from pythonjsonlogger import jsonlogger
+    from pythonjsonlogger import jsonlogger as _jsonlogger
 except ImportError:
-    jsonlogger = None  # type: ignore
+    _jsonlogger = None
+
+jsonlogger: Any | None = _jsonlogger
+JsonFormatter: Any = getattr(jsonlogger, "JsonFormatter", None)
 
 
 class RequestIDFilter(logging.Filter):
@@ -18,7 +23,7 @@ class RequestIDFilter(logging.Filter):
         """Add request_id field to log record."""
         from app.utils.request_context import get_request_id
 
-        record.request_id = get_request_id() or "no-request-id"  # type: ignore[attr-defined]
+        record.request_id = get_request_id() or "no-request-id"
         return True
 
 
@@ -47,9 +52,9 @@ def configure_json_logging(
     request_id_filter = RequestIDFilter()
     stream_handler.addFilter(request_id_filter)
 
-    if use_json and jsonlogger is not None:
+    if use_json and JsonFormatter is not None:
         # JSON formatter with structured fields including request_id
-        json_formatter = jsonlogger.JsonFormatter(
+        json_formatter = JsonFormatter(
             fmt="%(timestamp)s %(level)s %(name)s %(message)s %(request_id)s",
             timestamp=True,
         )

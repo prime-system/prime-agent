@@ -34,9 +34,8 @@ def get_vault_lock() -> asyncio.Lock:
         RuntimeError: If lock not initialized (must call init_vault_lock() in app lifespan)
     """
     if _vault_lock is None:
-        raise RuntimeError(
-            "Vault lock not initialized. Must call init_vault_lock() in app lifespan."
-        )
+        msg = "Vault lock not initialized. Must call init_vault_lock() in app lifespan."
+        raise RuntimeError(msg)
     return _vault_lock
 
 
@@ -56,7 +55,8 @@ async def init_vault_lock() -> asyncio.Lock:
     """
     global _vault_lock
     if _vault_lock is not None:
-        raise RuntimeError("Vault lock already initialized")
+        msg = "Vault lock already initialized"
+        raise RuntimeError(msg)
     _vault_lock = asyncio.Lock()
     logger.debug("Vault lock initialized in event loop")
     return _vault_lock

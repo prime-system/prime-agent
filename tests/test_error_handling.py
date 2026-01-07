@@ -245,9 +245,7 @@ class TestErrorHandlingUtilities:
         result = successful_sync()
         assert result == 123
 
-    def test_log_errors_decorator_sync_failure(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_log_errors_decorator_sync_failure(self, caplog: pytest.LogCaptureFixture) -> None:
         """Decorator logs errors from sync functions."""
 
         @log_errors("test_sync_operation")

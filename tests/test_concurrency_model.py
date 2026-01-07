@@ -82,7 +82,9 @@ async def test_asyncio_locks_properly_used() -> None:
 
         # Should use async with (not with) for locks
         if "asyncio.Lock" in content:
-            assert "async with" in content, f"{file_path}: asyncio.Lock found but no 'async with' usage"
+            assert "async with" in content, (
+                f"{file_path}: asyncio.Lock found but no 'async with' usage"
+            )
 
 
 @pytest.mark.asyncio

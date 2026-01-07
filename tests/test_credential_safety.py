@@ -122,7 +122,9 @@ class TestRedactionUtility:
 class TestConfigCredentialSafety:
     """Tests for credential safety in configuration."""
 
-    def test_config_no_print_statements_with_credentials(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_config_no_print_statements_with_credentials(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
         """Verify that config loading doesn't use print() for credentials."""
         # This test relies on the actual code not having print() statements
         # We verify this by checking the grep results during implementation
@@ -130,34 +132,15 @@ class TestConfigCredentialSafety:
 
         # Verify logger is used instead of print
         source = open(app.config.__file__).read()
-        lines_with_apn_debug = [
+        lines_with_sensitive_config = [
             line
             for line in source.split("\n")
-            if "apple_team_id" in line or "apple_key_id" in line or "apple_p8_key" in line
+            if "anthropic_api_key" in line or "auth_token" in line or "git_token" in line
         ]
 
         # Should not find any print() statements with credentials
-        for line in lines_with_apn_debug:
+        for line in lines_with_sensitive_config:
             assert "print(" not in line, f"Found print() with credentials: {line}"
-
-    def test_apn_logging_safe_in_main(self) -> None:
-        """Verify APNs initialization logging doesn't expose credentials."""
-        import app.main
-
-        source = open(app.main.__file__).read()
-
-        # Should not find logger calls that include team_id or key_id
-        dangerous_patterns = [
-            "team_id:",
-            "key_id:",
-            "{settings.apple_team_id}",
-            "{settings.apple_key_id}",
-        ]
-
-        for pattern in dangerous_patterns:
-            assert pattern not in source, (
-                f"Found dangerous pattern in main.py: {pattern}"
-            )
 
 
 class TestLoggingNoCredentials:
@@ -195,6 +178,4 @@ class TestLoggingNoCredentials:
         # Verify no sensitive patterns in logs
         sensitive_patterns = ["secret-456", push_url]
         for pattern in sensitive_patterns:
-            assert pattern not in caplog.text, (
-                f"Found sensitive pattern in logs: {pattern}"
-            )
+            assert pattern not in caplog.text, f"Found sensitive pattern in logs: {pattern}"

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
-from app.models.frontmatter import CommandFrontmatter
+if TYPE_CHECKING:
+    from app.models.frontmatter import CommandFrontmatter
 
 
 class CommandType(str, Enum):
@@ -27,9 +29,7 @@ class CommandInfo(BaseModel):
         None,
         description="Namespace from subdirectory (e.g., 'frontend' for commands/frontend/test.md)",
     )
-    argument_hint: str | None = Field(
-        None, description="Expected arguments for the command"
-    )
+    argument_hint: str | None = Field(None, description="Expected arguments for the command")
     path: str = Field(..., description="Relative path to the command file")
     file_name: str = Field(..., description="Name of the command file")
 
@@ -38,27 +38,19 @@ class CommandDetail(BaseModel):
     """Detailed information about a slash command."""
 
     info: CommandInfo = Field(..., description="Basic command information")
-    frontmatter: CommandFrontmatter | None = Field(
-        None, description="Parsed frontmatter metadata"
-    )
+    frontmatter: CommandFrontmatter | None = Field(None, description="Parsed frontmatter metadata")
     content: str = Field(..., description="Full markdown content (without frontmatter)")
     raw_content: str = Field(..., description="Raw file content including frontmatter")
-    has_arguments: bool = Field(
-        False, description="Whether command uses argument placeholders"
-    )
+    has_arguments: bool = Field(False, description="Whether command uses argument placeholders")
     argument_placeholders: list[str] = Field(
         default_factory=list,
         description="List of argument placeholders found ($ARGUMENTS, $1, $2, etc.)",
     )
-    has_bash_execution: bool = Field(
-        False, description="Whether command executes bash commands"
-    )
+    has_bash_execution: bool = Field(False, description="Whether command executes bash commands")
     bash_commands: list[str] = Field(
         default_factory=list, description="List of bash commands found (with ! prefix)"
     )
-    has_file_references: bool = Field(
-        False, description="Whether command references files"
-    )
+    has_file_references: bool = Field(False, description="Whether command references files")
 
 
 class CommandListResponse(BaseModel):

@@ -138,9 +138,7 @@ class ClaudeSessionAPI:
         if query:
             query_lower = query.lower()
             sessions = [
-                s
-                for s in sessions
-                if s.get("summary") and query_lower in s["summary"].lower()
+                s for s in sessions if s.get("summary") and query_lower in s["summary"].lower()
             ]
 
         return sessions[:limit]
@@ -153,9 +151,7 @@ class ClaudeSessionAPI:
             "is_agent_session": session.is_agent_session,
             "agent_id": session.agent_id,
             "created_at": session.created_at.isoformat() if session.created_at else None,
-            "last_activity": (
-                session.last_activity.isoformat() if session.last_activity else None
-            ),
+            "last_activity": (session.last_activity.isoformat() if session.last_activity else None),
             "message_count": session.message_count,
             "messages": [self._message_to_dict(msg) for msg in session.messages],
         }

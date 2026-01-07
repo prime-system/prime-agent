@@ -59,7 +59,7 @@ class SSEEvent(BaseModel):
     """SSE event data structure."""
 
     type: SSEEventType = Field(..., description="Event type")
-    data: dict = Field(default_factory=dict, description="Event payload")
+    data: dict[str, Any] = Field(default_factory=dict, description="Event payload")
 
 
 class WSMessageType(str, Enum):

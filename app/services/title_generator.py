@@ -1,7 +1,10 @@
 """Service for generating titles from capture text using Claude."""
 
+from __future__ import annotations
+
 import logging
 import re
+from typing import Any
 
 from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
 
@@ -14,7 +17,7 @@ class TitleGenerator:
     """Generates short titles from capture text using Claude."""
 
     # JSON Schema for structured output - guarantees valid title format
-    TITLE_SCHEMA = {
+    TITLE_SCHEMA: dict[str, Any] = {
         "type": "object",
         "properties": {
             "title": {
@@ -26,7 +29,7 @@ class TitleGenerator:
         "required": ["title"],
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.anthropic_api_key = settings.anthropic_api_key
 
     async def generate_title(self, text: str, max_length: int = 50) -> str:
@@ -76,15 +79,20 @@ Example: "meeting-notes-with-team" or "grocery-shopping-list"
             message_generator = query(prompt=prompt, options=options)
             try:
                 async for message in message_generator:
-                    if isinstance(message, ResultMessage):
+                    if isinstance(message, ResultMessage) and getattr(
+                        message, "structured_output", None
+                    ):
                         # ResultMessage contains the final structured output
-                        if hasattr(message, "structured_output") and message.structured_output:
-                            title_result = message.structured_output.get("title", "")
-                            # Exit after getting the result - generator will be explicitly closed
-                            break
+                        title_value = message.structured_output.get("title")
+                        if isinstance(title_value, str):
+                            title_result = title_value
+                        # Exit after getting the result - generator will be explicitly closed
+                        break
             finally:
                 # Explicitly close the generator to ensure proper cleanup
-                await message_generator.aclose()
+                aclose = getattr(message_generator, "aclose", None)
+                if callable(aclose):
+                    await aclose()
 
             # Extract result after generator finishes
             if title_result and len(title_result) >= 3:
@@ -93,8 +101,8 @@ Example: "meeting-notes-with-team" or "grocery-shopping-list"
             # Fallback if no title was generated
             return self._fallback_title(text, max_length)
 
-        except Exception as e:
-            logger.error(f"Failed to generate title: {e}")
+        except Exception:
+            logger.exception("Failed to generate title")
             # Fallback to a simple sanitized version of the first few words
             return self._fallback_title(text, max_length)
 
@@ -113,9 +121,7 @@ Example: "meeting-notes-with-team" or "grocery-shopping-list"
         title = re.sub(r"-+", "-", title)
 
         # Remove leading/trailing hyphens
-        title = title.strip("-")
-
-        return title
+        return title.strip("-")
 
     def _fallback_title(self, text: str, max_length: int) -> str:
         """Generate a simple fallback title from the first few words."""

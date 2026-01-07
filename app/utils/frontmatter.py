@@ -24,8 +24,6 @@ logger = logging.getLogger(__name__)
 class FrontmatterError(Exception):
     """Raised when frontmatter parsing fails."""
 
-    pass
-
 
 class ParsedContent(NamedTuple):
     """Result of parsing markdown with frontmatter."""
@@ -129,7 +127,8 @@ def parse_frontmatter(content: str) -> ParsedContent:
                 "frontmatter_length": len(frontmatter_text),
             },
         )
-        raise FrontmatterError(f"Invalid YAML in frontmatter: {e}") from e
+        msg = f"Invalid YAML in frontmatter: {e}"
+        raise FrontmatterError(msg) from e
 
 
 def serialize_frontmatter(frontmatter: dict[str, Any], body: str) -> str:
@@ -164,7 +163,8 @@ def serialize_frontmatter(frontmatter: dict[str, Any], body: str) -> str:
         return f"---\n{yaml_str}\n---\n\n{body}\n"
 
     except yaml.YAMLError as e:
-        raise FrontmatterError(f"Failed to serialize frontmatter: {e}") from e
+        msg = f"Failed to serialize frontmatter: {e}"
+        raise FrontmatterError(msg) from e
 
 
 def update_frontmatter(
@@ -188,12 +188,7 @@ def update_frontmatter(
     """
     parsed = parse_frontmatter(content)
 
-    if merge:
-        # Merge updates into existing frontmatter
-        new_frontmatter = {**parsed.frontmatter, **updates}
-    else:
-        # Replace frontmatter entirely
-        new_frontmatter = updates
+    new_frontmatter = {**parsed.frontmatter, **updates} if merge else updates
 
     return serialize_frontmatter(new_frontmatter, parsed.body)
 
@@ -242,7 +237,8 @@ def parse_and_validate_capture(content: str) -> tuple[CaptureFrontmatter, str]:
     parsed = parse_frontmatter(content)
 
     if not parsed.frontmatter:
-        raise FrontmatterError("Capture file must have frontmatter")
+        msg = "Capture file must have frontmatter"
+        raise FrontmatterError(msg)
 
     try:
         validated = CaptureFrontmatter(**parsed.frontmatter)
@@ -255,9 +251,8 @@ def parse_and_validate_capture(content: str) -> tuple[CaptureFrontmatter, str]:
                 "frontmatter": parsed.frontmatter,
             },
         )
-        raise FrontmatterError(
-            f"Capture frontmatter validation failed: {e}"
-        ) from e
+        msg = f"Capture frontmatter validation failed: {e}"
+        raise FrontmatterError(msg) from e
 
 
 def parse_and_validate_command(content: str) -> tuple[CommandFrontmatter, str]:
@@ -287,6 +282,5 @@ def parse_and_validate_command(content: str) -> tuple[CommandFrontmatter, str]:
                 "frontmatter": parsed.frontmatter,
             },
         )
-        raise FrontmatterError(
-            f"Command frontmatter validation failed: {e}"
-        ) from e
+        msg = f"Command frontmatter validation failed: {e}"
+        raise FrontmatterError(msg) from e

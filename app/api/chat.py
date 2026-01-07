@@ -8,11 +8,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, WebSocket, status
 from fastapi.websockets import WebSocketDisconnect
 
-from app.dependencies import (
-    get_agent_chat_service,
-    get_agent_session_manager,
-    get_chat_session_manager,
-)
+from app.dependencies import get_agent_session_manager, get_chat_session_manager
 from app.models.chat import (
     ChatHistoryResponse,
     ChatMessage,
@@ -20,7 +16,6 @@ from app.models.chat import (
     WSInputMessage,
     WSMessageType,
 )
-from app.services.agent_chat import AgentChatService
 from app.services.chat_session_manager import ChatSessionManager
 
 logger = logging.getLogger(__name__)
@@ -35,7 +30,7 @@ class ConnectionManager:
     This class only manages WebSocket connections.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize connection manager."""
         self.active_connections: dict[str, WebSocket] = {}
         self._lock = asyncio.Lock()
@@ -63,7 +58,7 @@ class ConnectionManager:
             logger.info("WebSocket connected (connection=%s)", connection_id)
             return True
 
-    def disconnect(self, connection_id: str):
+    def disconnect(self, connection_id: str) -> None:
         """
         Clean up connection.
 
@@ -124,7 +119,7 @@ async def create_session(
 
     return ChatSessionResponse(
         session_id=connection_id,
-        created_at=datetime.now(UTC).isoformat(),
+        created_at=datetime.now(UTC),
     )
 
 
@@ -193,7 +188,7 @@ async def websocket_endpoint(
     session_id: str,
     session_manager: ChatSessionManager = Depends(get_chat_session_manager),
     agent_session_manager: Any = Depends(get_agent_session_manager),
-):
+) -> None:
     """
     WebSocket endpoint for bidirectional chat communication.
 
@@ -256,11 +251,13 @@ async def websocket_endpoint(
         )
 
         # Send connection confirmation
-        await websocket.send_json({
-            "type": WSMessageType.CONNECTED.value,
-            "connection_id": connection_id,
-            "session_id": agent_session.session_id,
-        })
+        await websocket.send_json(
+            {
+                "type": WSMessageType.CONNECTED.value,
+                "connection_id": connection_id,
+                "session_id": agent_session.session_id,
+            }
+        )
 
         # Replay buffered messages
         for msg in buffered:
@@ -278,10 +275,12 @@ async def websocket_endpoint(
                 if msg.type == WSMessageType.USER_MESSAGE:
                     user_message = msg.data.get("message")
                     if not user_message:
-                        await websocket.send_json({
-                            "type": WSMessageType.ERROR.value,
-                            "error": "Missing 'message' field in data",
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": WSMessageType.ERROR.value,
+                                "error": "Missing 'message' field in data",
+                            }
+                        )
                         continue
 
                     # Send to agent session
@@ -291,17 +290,21 @@ async def websocket_endpoint(
 
                 elif msg.type == WSMessageType.INTERRUPT:
                     # TODO: Implement interrupt support
-                    await websocket.send_json({
-                        "type": WSMessageType.ERROR.value,
-                        "error": "Interrupt not yet implemented",
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": WSMessageType.ERROR.value,
+                            "error": "Interrupt not yet implemented",
+                        }
+                    )
 
             except Exception as e:
                 logger.error("Error handling message: %s", e)
-                await websocket.send_json({
-                    "type": WSMessageType.ERROR.value,
-                    "error": f"Invalid message format: {e}",
-                })
+                await websocket.send_json(
+                    {
+                        "type": WSMessageType.ERROR.value,
+                        "error": f"Invalid message format: {e}",
+                    }
+                )
 
     except WebSocketDisconnect:
         logger.info("Client disconnected from connection %s", connection_id)

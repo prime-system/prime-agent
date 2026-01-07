@@ -242,6 +242,7 @@ class TestSafeBackgroundTask:
     @pytest.mark.asyncio
     async def test_task_doesnt_raise_to_caller(self) -> None:
         """Verify exceptions are caught and don't propagate."""
+
         async def failing_task() -> None:
             raise ValueError("This should be caught")
 

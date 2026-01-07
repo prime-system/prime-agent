@@ -77,8 +77,7 @@ class TestVaultConfig:
         )
         config = load_vault_config(vault)
         assert (
-            config.inbox.file_pattern
-            == "{year}-{month}-{day}_{hour}-{minute}-{second}_{source}.md"
+            config.inbox.file_pattern == "{year}-{month}-{day}_{hour}-{minute}-{second}_{source}.md"
         )
 
 

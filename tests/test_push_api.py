@@ -39,7 +39,9 @@ async def push_app(temp_devices_file, mock_relay_client, monkeypatch):
     await device_registry.init_file_lock()
 
     # Monkey-patch settings to use temp file
-    monkeypatch.setattr(settings._config_manager._current_settings, "apn_devices_file", temp_devices_file)
+    monkeypatch.setattr(
+        settings._config_manager._current_settings, "apn_devices_file", temp_devices_file
+    )
 
     app = FastAPI(title="Prime Server Test")
     app.include_router(push.router, prefix="/api/v1", tags=["push"])
@@ -250,7 +252,12 @@ class TestSendNotificationEndpoint:
     """Test POST /api/v1/notifications/send endpoint."""
 
     def test_send_to_single_device(
-        self, push_client, valid_register_request, auth_headers, temp_devices_file, mock_relay_client
+        self,
+        push_client,
+        valid_register_request,
+        auth_headers,
+        temp_devices_file,
+        mock_relay_client,
     ):
         """Send notification to single registered device."""
         # Register a device first
@@ -291,7 +298,12 @@ class TestSendNotificationEndpoint:
         )
 
     def test_send_to_multiple_devices(
-        self, push_client, valid_register_request, auth_headers, temp_devices_file, mock_relay_client
+        self,
+        push_client,
+        valid_register_request,
+        auth_headers,
+        temp_devices_file,
+        mock_relay_client,
     ):
         """Send notification to multiple devices."""
         # Register two devices
@@ -333,7 +345,12 @@ class TestSendNotificationEndpoint:
         assert mock_relay_client.send_push.call_count == 2
 
     def test_send_with_device_filter(
-        self, push_client, valid_register_request, auth_headers, temp_devices_file, mock_relay_client
+        self,
+        push_client,
+        valid_register_request,
+        auth_headers,
+        temp_devices_file,
+        mock_relay_client,
     ):
         """Send notification with device filter."""
         # Register two devices
@@ -374,7 +391,12 @@ class TestSendNotificationEndpoint:
         assert mock_relay_client.send_push.call_count == 1
 
     def test_send_handles_410_gone(
-        self, push_client, valid_register_request, auth_headers, temp_devices_file, mock_relay_client
+        self,
+        push_client,
+        valid_register_request,
+        auth_headers,
+        temp_devices_file,
+        mock_relay_client,
     ):
         """Send notification handles 410 Gone response by removing device."""
         # Register a device
@@ -417,7 +439,12 @@ class TestSendNotificationEndpoint:
         assert len(devices["devices"]) == 0
 
     def test_send_handles_other_http_errors(
-        self, push_client, valid_register_request, auth_headers, temp_devices_file, mock_relay_client
+        self,
+        push_client,
+        valid_register_request,
+        auth_headers,
+        temp_devices_file,
+        mock_relay_client,
     ):
         """Send notification handles non-410 HTTP errors without removing device."""
         # Register a device

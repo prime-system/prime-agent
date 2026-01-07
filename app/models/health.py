@@ -23,7 +23,7 @@ class ServiceHealth(BaseModel):
     status: HealthStatus = Field(..., description="Health status")
     message: str | None = Field(None, description="Status message")
     response_time_ms: float | None = Field(None, description="Response time in milliseconds")
-    details: dict = Field(default_factory=dict, description="Additional details")
+    details: dict[str, object] = Field(default_factory=dict, description="Additional details")
 
 
 class HealthCheckResponse(BaseModel):
@@ -32,7 +32,9 @@ class HealthCheckResponse(BaseModel):
     status: HealthStatus = Field(..., description="Overall status")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="Response timestamp")
     version: str = Field(..., description="Application version")
-    services: list[ServiceHealth] = Field(default_factory=list, description="Status of each service")
+    services: list[ServiceHealth] = Field(
+        default_factory=list, description="Status of each service"
+    )
 
     def is_ready(self) -> bool:
         """

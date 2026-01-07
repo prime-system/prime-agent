@@ -230,9 +230,7 @@ class ClaudeSessionReader:
                     if msg_type in ("user", "assistant"):
                         timestamp_str = data.get("timestamp")
                         if timestamp_str:
-                            timestamp = datetime.fromisoformat(
-                                timestamp_str.replace("Z", "+00:00")
-                            )
+                            timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
 
                             if metadata["created_at"] is None:
                                 metadata["created_at"] = timestamp

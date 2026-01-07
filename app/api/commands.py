@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import logging
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path
 
 from app.dependencies import verify_token
 from app.exceptions import VaultError
 from app.models.command import CommandDetail, CommandListResponse
-from app.services.command import CommandService
 from app.services.container import get_container
+
+if TYPE_CHECKING:
+    from app.services.command import CommandService
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +34,7 @@ def get_command_service() -> CommandService:
         container = get_container()
         return container.command_service
     except RuntimeError as e:
-        raise HTTPException(
-            status_code=500, detail="Service container not initialized"
-        ) from e
+        raise HTTPException(status_code=500, detail="Service container not initialized") from e
 
 
 @router.get("", response_model=CommandListResponse)
@@ -68,14 +68,13 @@ async def list_commands(
         )
         return response
     except VaultError as e:
-        logger.error(
+        logger.exception(
             "Failed to list commands",
             extra=e.context,
-            exc_info=True,
         )
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to list commands: {str(e)}",
+            detail=f"Failed to list commands: {e!s}",
         ) from e
     except Exception as e:
         logger.exception(
@@ -93,9 +92,7 @@ async def list_commands(
 
 @router.get("/{command_name}", response_model=CommandDetail)
 async def get_command_detail(
-    command_name: Annotated[
-        str, Path(description="Command name (without leading slash)")
-    ],
+    command_name: Annotated[str, Path(description="Command name (without leading slash)")],
     command_service: CommandService = Depends(get_command_service),
 ) -> CommandDetail:
     """
@@ -134,17 +131,16 @@ async def get_command_detail(
         )
         return command_detail
     except VaultError as e:
-        logger.error(
+        logger.exception(
             "Failed to get command detail",
             extra={
                 "command_name": command_name,
                 **e.context,
             },
-            exc_info=True,
         )
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to get command: {str(e)}",
+            detail=f"Failed to get command: {e!s}",
         ) from e
     except HTTPException:
         # Re-raise HTTP exceptions (like 404)

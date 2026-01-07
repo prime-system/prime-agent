@@ -119,7 +119,9 @@ async def get_session(
             detail=f"Session {validated_id} not found",
         )
 
-    logger.info("Retrieved Claude session %s with %d messages", validated_id, session["message_count"])
+    logger.info(
+        "Retrieved Claude session %s with %d messages", validated_id, session["message_count"]
+    )
 
     return SessionDetailResponse(**session)
 

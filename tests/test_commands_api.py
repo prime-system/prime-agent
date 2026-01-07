@@ -68,13 +68,11 @@ def test_list_commands_requires_auth(client_with_commands: TestClient) -> None:
     """Test that listing commands requires authentication."""
     response = client_with_commands.get("/api/commands")
 
-    assert response.status_code == 403
+    assert response.status_code == 401
     assert "Not authenticated" in response.json()["detail"]
 
 
-def test_list_commands_empty(
-    client_with_commands: TestClient, temp_vault: Path
-) -> None:
+def test_list_commands_empty(client_with_commands: TestClient, temp_vault: Path) -> None:
     """Test listing commands when none exist."""
     response = client_with_commands.get(
         "/api/commands", headers={"Authorization": "Bearer test-token-123"}
@@ -89,9 +87,7 @@ def test_list_commands_empty(
     assert len(data["commands"]) == 0
 
 
-def test_list_commands_with_data(
-    client_with_commands: TestClient, temp_vault: Path
-) -> None:
+def test_list_commands_with_data(client_with_commands: TestClient, temp_vault: Path) -> None:
     """Test listing commands with actual command files."""
     # Create command files
     commands_dir = temp_vault / ".claude" / "commands"
@@ -136,9 +132,7 @@ Second command content
     assert cmd1["namespace"] is None
 
 
-def test_list_commands_with_namespaces(
-    client_with_commands: TestClient, temp_vault: Path
-) -> None:
+def test_list_commands_with_namespaces(client_with_commands: TestClient, temp_vault: Path) -> None:
     """Test listing commands with subdirectory namespaces."""
     commands_dir = temp_vault / ".claude" / "commands"
     frontend_dir = commands_dir / "frontend"
@@ -171,13 +165,11 @@ def test_get_command_detail_requires_auth(
     """Test that getting command detail requires authentication."""
     response = client_with_commands.get("/api/commands/test-cmd")
 
-    assert response.status_code == 403
+    assert response.status_code == 401
     assert "Not authenticated" in response.json()["detail"]
 
 
-def test_get_command_detail_not_found(
-    client_with_commands: TestClient, temp_vault: Path
-) -> None:
+def test_get_command_detail_not_found(client_with_commands: TestClient, temp_vault: Path) -> None:
     """Test getting command that doesn't exist."""
     response = client_with_commands.get(
         "/api/commands/nonexistent", headers={"Authorization": "Bearer test-token-123"}
@@ -187,9 +179,7 @@ def test_get_command_detail_not_found(
     assert "not found" in response.json()["detail"]
 
 
-def test_get_command_detail_success(
-    client_with_commands: TestClient, temp_vault: Path
-) -> None:
+def test_get_command_detail_success(client_with_commands: TestClient, temp_vault: Path) -> None:
     """Test getting command detail successfully."""
     commands_dir = temp_vault / ".claude" / "commands"
     commands_dir.mkdir(parents=True)
@@ -209,7 +199,7 @@ def test_get_command_detail_success(
         "# Code Review\n"
         "\n"
         "Review the code in $1 for:\n"
-        "- Security issues: !`grep -r \"eval(\" .`\n"
+        '- Security issues: !`grep -r "eval(" .`\n'
         "- Performance problems\n"
         "- Code style\n"
         "\n"
@@ -254,9 +244,7 @@ def test_get_command_detail_success(
     assert data["has_file_references"] is True
 
 
-def test_get_command_detail_minimal(
-    client_with_commands: TestClient, temp_vault: Path
-) -> None:
+def test_get_command_detail_minimal(client_with_commands: TestClient, temp_vault: Path) -> None:
     """Test getting command detail with minimal frontmatter."""
     commands_dir = temp_vault / ".claude" / "commands"
     commands_dir.mkdir(parents=True)
@@ -309,9 +297,7 @@ All remaining args: $ARGUMENTS
     assert "$ARGUMENTS" in placeholders
 
 
-def test_response_format_validation(
-    client_with_commands: TestClient, temp_vault: Path
-) -> None:
+def test_response_format_validation(client_with_commands: TestClient, temp_vault: Path) -> None:
     """Test that API responses match expected schema."""
     commands_dir = temp_vault / ".claude" / "commands"
     commands_dir.mkdir(parents=True)

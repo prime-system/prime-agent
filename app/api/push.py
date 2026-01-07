@@ -119,9 +119,7 @@ async def send_notification(
 
                 if queued:
                     sent += 1
-                    device_results.append(
-                        DeviceResult(name=device_name, status="sent", error=None)
-                    )
+                    device_results.append(DeviceResult(name=device_name, status="sent", error=None))
                 else:
                     failed += 1
                     device_results.append(
@@ -172,9 +170,7 @@ async def send_notification(
                     },
                 )
                 failed += 1
-                device_results.append(
-                    DeviceResult(name=device_name, status="failed", error=str(e))
-                )
+                device_results.append(DeviceResult(name=device_name, status="failed", error=str(e)))
 
         success = failed == 0
 

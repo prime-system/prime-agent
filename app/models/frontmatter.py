@@ -6,7 +6,6 @@ Provides Pydantic models for strict validation of capture metadata.
 
 from __future__ import annotations
 
-from datetime import datetime
 from enum import Enum
 from typing import Any
 
@@ -45,16 +44,10 @@ class CaptureFrontmatter(BaseModel):
     """
 
     id: str = Field(..., description="Unique capture ID")
-    captured_at: str = Field(
-        ..., description="ISO8601 timestamp when captured"
-    )
-    source: str = Field(
-        ..., description="Source device (iphone, ipad, mac)"
-    )
+    captured_at: str = Field(..., description="ISO8601 timestamp when captured")
+    source: str = Field(..., description="Source device (iphone, ipad, mac)")
     input: str = Field(..., description="Input method (voice, text)")
-    processed: bool = Field(
-        default=False, description="Whether capture has been processed"
-    )
+    processed: bool = Field(default=False, description="Whether capture has been processed")
     context: dict[str, object] = Field(
         default_factory=dict, description="Additional context metadata"
     )
@@ -62,16 +55,14 @@ class CaptureFrontmatter(BaseModel):
     def model_post_init(self, __context: object) -> None:
         """Validate enum values after model construction."""
         if self.source not in [e.value for e in CaptureSource]:
-            raise ValueError(
-                f"Invalid source '{self.source}': "
-                f"must be one of {[e.value for e in CaptureSource]}"
-            )
+            allowed = [e.value for e in CaptureSource]
+            msg = f"Invalid source '{self.source}': must be one of {allowed}"
+            raise ValueError(msg)
 
         if self.input not in [e.value for e in CaptureInput]:
-            raise ValueError(
-                f"Invalid input '{self.input}': "
-                f"must be one of {[e.value for e in CaptureInput]}"
-            )
+            allowed = [e.value for e in CaptureInput]
+            msg = f"Invalid input '{self.input}': must be one of {allowed}"
+            raise ValueError(msg)
 
 
 class CommandFrontmatter(BaseModel):
@@ -101,12 +92,8 @@ class CommandFrontmatter(BaseModel):
         description="Arguments expected for the slash command",
         alias="argument-hint",
     )
-    description: str | None = Field(
-        default=None, description="Brief description of the command"
-    )
-    model: str | None = Field(
-        default=None, description="Specific model string"
-    )
+    description: str | None = Field(default=None, description="Brief description of the command")
+    model: str | None = Field(default=None, description="Specific model string")
     disable_model_invocation: bool = Field(
         default=False,
         description="Whether to prevent SlashCommand tool from calling this command",

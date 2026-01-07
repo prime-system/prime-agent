@@ -239,9 +239,7 @@ old_key: old_value
 Body
 """
 
-        result = update_frontmatter(
-            content, {"new_key": "new_value"}, merge=True
-        )
+        result = update_frontmatter(content, {"new_key": "new_value"}, merge=True)
 
         # Should have both old and new keys
         assert "old_key" in result
@@ -458,9 +456,7 @@ Body content
 """
 
         parsed = parse_frontmatter(original)
-        reserialized = serialize_frontmatter(
-            parsed.frontmatter, parsed.body
-        )
+        reserialized = serialize_frontmatter(parsed.frontmatter, parsed.body)
         reparsed = parse_frontmatter(reserialized)
 
         assert reparsed.frontmatter["id"] == "test-123"
@@ -480,9 +476,7 @@ Content
 """
 
         parsed = parse_frontmatter(original)
-        reserialized = serialize_frontmatter(
-            parsed.frontmatter, parsed.body
-        )
+        reserialized = serialize_frontmatter(parsed.frontmatter, parsed.body)
         reparsed = parse_frontmatter(reserialized)
 
         assert reparsed.frontmatter["context"]["level2"]["value"] == 42

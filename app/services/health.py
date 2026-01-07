@@ -50,10 +50,12 @@ class HealthCheckService:
             vault_path = self.vault_service.vault_path
 
             if not vault_path.exists():
+                elapsed = (datetime.utcnow() - start).total_seconds() * 1000
                 return ServiceHealth(
                     name="vault",
                     status=HealthStatus.UNHEALTHY,
                     message="Vault directory does not exist",
+                    response_time_ms=elapsed,
                 )
 
             # Check write permission by attempting to create a test file
@@ -62,10 +64,12 @@ class HealthCheckService:
                 test_file.write_text("health_check")
                 test_file.unlink()
             except Exception as e:
+                elapsed = (datetime.utcnow() - start).total_seconds() * 1000
                 return ServiceHealth(
                     name="vault",
                     status=HealthStatus.UNHEALTHY,
                     message=f"Vault not writable: {e}",
+                    response_time_ms=elapsed,
                 )
 
             elapsed = (datetime.utcnow() - start).total_seconds() * 1000
@@ -80,10 +84,12 @@ class HealthCheckService:
 
         except Exception as e:
             logger.exception("Vault health check failed")
+            elapsed = (datetime.utcnow() - start).total_seconds() * 1000
             return ServiceHealth(
                 name="vault",
                 status=HealthStatus.UNHEALTHY,
                 message=f"Vault check failed: {e}",
+                response_time_ms=elapsed,
             )
 
     async def check_git_health(self) -> ServiceHealth:
@@ -98,6 +104,7 @@ class HealthCheckService:
                 name="git",
                 status=HealthStatus.HEALTHY,
                 message="Git disabled",
+                response_time_ms=0.0,
             )
 
         start = datetime.utcnow()
@@ -118,10 +125,12 @@ class HealthCheckService:
 
         except Exception as e:
             logger.exception("Git health check failed")
+            elapsed = (datetime.utcnow() - start).total_seconds() * 1000
             return ServiceHealth(
                 name="git",
                 status=HealthStatus.DEGRADED,
                 message=f"Git check failed: {e}",
+                response_time_ms=elapsed,
             )
 
     async def check_health(self) -> HealthCheckResponse:

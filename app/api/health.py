@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, Depends, Response, status
 
 from app.dependencies import get_health_service, verify_token
-from app.models.health import HealthCheckResponse, HealthStatus
-from app.services.health import HealthCheckService
+from app.models.health import HealthCheckResponse
+
+if TYPE_CHECKING:
+    from app.services.health import HealthCheckService
 
 router = APIRouter(tags=["health"])
 
 
 @router.get("/health")
-async def health() -> dict:
+async def health() -> dict[str, str]:
     """
     Simple health check for liveness probe.
 

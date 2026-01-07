@@ -95,9 +95,7 @@ def get_task_tracker() -> BackgroundTaskTracker:
     return _task_tracker
 
 
-async def safe_background_task(
-    task_name: str, coro: Callable[[], Any]
-) -> None:
+async def safe_background_task(task_name: str, coro: Callable[[], Any]) -> None:
     """
     Execute a background task safely, logging any errors.
 

@@ -3,18 +3,30 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import capture, chat, claude_sessions, commands, config, files, git, health, monitoring, processing, push
+from app.api import (
+    capture,
+    chat,
+    claude_sessions,
+    commands,
+    config,
+    files,
+    git,
+    health,
+    monitoring,
+    processing,
+    push,
+)
 from app.config import settings
 from app.logging_config import configure_json_logging
 from app.middleware.request_id import RequestIDMiddleware
+from app.services import agent_identity, device_registry
 from app.services.agent import AgentService
-from app.services.lock import init_vault_lock
 from app.services.agent_chat import AgentChatService
+from app.services.agent_identity import AgentIdentityService
 from app.services.agent_session_manager import AgentSessionManager
 from app.services.chat_session_manager import ChatSessionManager
 from app.services.claude_session_api import ClaudeSessionAPI
@@ -23,9 +35,8 @@ from app.services.container import init_container
 from app.services.git import GitService
 from app.services.health import HealthCheckService
 from app.services.inbox import InboxService
+from app.services.lock import init_vault_lock
 from app.services.logs import LogService
-from app.services import agent_identity, device_registry
-from app.services.agent_identity import AgentIdentityService
 from app.services.relay_client import PrimePushRelayClient
 from app.services.vault import VaultService
 from app.services.worker import AgentWorker
@@ -39,10 +50,13 @@ logger = logging.getLogger(__name__)
 # The SDK creates cancel scopes in one task but they're exited in another
 # This is a known SDK issue and doesn't affect functionality
 asyncio_logger = logging.getLogger("asyncio")
+
+
 class AsyncioErrorFilter(logging.Filter):
-    def filter(self, record):
-        # Suppress: "Attempted to exit cancel scope in a different task"
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Suppress known asyncio cancel scope warning from Claude SDK."""
         return "Attempted to exit cancel scope in a different task" not in record.getMessage()
+
 
 asyncio_logger.addFilter(AsyncioErrorFilter())
 
@@ -110,7 +124,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         timeout_seconds=settings.anthropic_timeout_seconds,
     )
 
-    log_service = LogService(logs_dir=vault_service.logs_path(), vault_path=vault_service.vault_path)
+    log_service = LogService(
+        logs_dir=vault_service.logs_path(), vault_path=vault_service.vault_path
+    )
 
     # Initialize chat session manager (works directly with Claude sessions)
     chat_session_manager = ChatSessionManager(

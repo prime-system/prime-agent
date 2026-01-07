@@ -70,7 +70,7 @@ def redact_dict(data: dict[str, Any]) -> dict[str, Any]:
     Returns:
         New dictionary with sensitive values replaced with [REDACTED]
     """
-    redacted = {}
+    redacted: dict[str, Any] = {}
     for key, value in data.items():
         if key.lower() in SENSITIVE_KEYS:
             redacted[key] = "[REDACTED]"
@@ -78,8 +78,7 @@ def redact_dict(data: dict[str, Any]) -> dict[str, Any]:
             redacted[key] = redact_dict(value)
         elif isinstance(value, (list, tuple)):
             redacted[key] = [
-                redact_dict(item) if isinstance(item, dict) else item
-                for item in value
+                redact_dict(item) if isinstance(item, dict) else item for item in value
             ]
         else:
             redacted[key] = value

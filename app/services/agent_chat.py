@@ -286,8 +286,7 @@ class AgentChatService:
                         # Handle result message
                         if isinstance(message, ResultMessage):
                             logger.info(
-                                "Agent response complete (session=%s). "
-                                "Cost: $%.4f, Duration: %dms",
+                                "Agent response complete (session=%s). Cost: $%.4f, Duration: %dms",
                                 current_session_id,
                                 message.total_cost_usd,
                                 message.duration_ms,

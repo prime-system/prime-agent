@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path  # noqa: TC003
 from uuid import uuid4
 
 from pydantic import BaseModel
@@ -120,8 +120,9 @@ class AgentIdentityService:
             # Clean up temp file
             if temp_file.exists():
                 temp_file.unlink()
+            msg = "Failed to save agent identity"
             raise ConfigurationError(
-                "Failed to save agent identity",
+                msg,
                 context={
                     "operation": "save_identity",
                     "path": str(self.identity_file),

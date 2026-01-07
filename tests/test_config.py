@@ -482,7 +482,9 @@ logging:
         os.environ["APPLE_BUNDLE_ID"] = "com.example.primeapp"
         os.environ["APPLE_KEY_ID"] = "YYYYYYYYYY"
         # Store P8 key with escaped newlines for proper YAML parsing
-        os.environ["APPLE_P8_KEY"] = "-----BEGIN PRIVATE KEY-----\\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEH\\n-----END PRIVATE KEY-----"
+        os.environ["APPLE_P8_KEY"] = (
+            "-----BEGIN PRIVATE KEY-----\\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEH\\n-----END PRIVATE KEY-----"
+        )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config_path = Path(tmpdir) / "config.yaml"
@@ -629,4 +631,7 @@ apn:
 
             # Verify that at least one APNs field failed validation
             error_str = str(exc_info.value)
-            assert any(field in error_str for field in ["apple_team_id", "apple_bundle_id", "apple_key_id", "apple_p8_key"])
+            assert any(
+                field in error_str
+                for field in ["apple_team_id", "apple_bundle_id", "apple_key_id", "apple_p8_key"]
+            )

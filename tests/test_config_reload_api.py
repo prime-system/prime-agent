@@ -55,13 +55,11 @@ def test_health_endpoint():
     assert "status" in response.json()
 
 
-def test_config_endpoint_without_auth():
-    """Test that config endpoint is available without auth."""
+def test_config_endpoint_requires_auth():
+    """Test that config endpoint requires authentication."""
     client = TestClient(app)
     response = client.get("/api/v1/config")
-    assert response.status_code == 200
-    assert "features" in response.json()
-    assert "server_info" in response.json()
+    assert response.status_code == 401
 
 
 def test_config_reload_requires_auth():
@@ -70,7 +68,7 @@ def test_config_reload_requires_auth():
 
     # Call without auth token
     response = client.post("/api/v1/config/reload")
-    assert response.status_code == 403  # Forbidden (no auth header)
+    assert response.status_code == 401  # Unauthorized (no auth header)
 
     # Call with invalid auth token
     response = client.post(

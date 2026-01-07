@@ -210,6 +210,7 @@ class TestErrorHandling:
         """Test that get_file_lock raises RuntimeError if not initialized."""
         # Reset lock
         import app.services.agent_identity as agent_identity_module
+
         agent_identity_module._file_lock = None
 
         with pytest.raises(RuntimeError, match="File lock not initialized"):

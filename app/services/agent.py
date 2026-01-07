@@ -154,7 +154,17 @@ class AgentService:
             env_dict["ANTHROPIC_BASE_URL"] = self.base_url
 
         options = ClaudeAgentOptions(
-            allowed_tools=["Read", "Write", "Edit", "Glob", "Grep", "Bash", "Skill", "WebSearch", "WebFetch"],
+            allowed_tools=[
+                "Read",
+                "Write",
+                "Edit",
+                "Glob",
+                "Grep",
+                "Bash",
+                "Skill",
+                "WebSearch",
+                "WebFetch",
+            ],
             permission_mode="acceptEdits",  # Auto-approve file operations
             system_prompt={
                 "type": "preset",
@@ -194,7 +204,7 @@ class AgentService:
                         logger.error(
                             "Agent returned error",
                             extra={
-                                "message": str(message),
+                                "agent_message": str(message),
                             },
                         )
 

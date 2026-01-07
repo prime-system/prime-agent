@@ -9,6 +9,8 @@ from app.exceptions import GitError
 
 logger = logging.getLogger(__name__)
 
+__all__ = ["GitError", "GitService"]
+
 
 class GitService:
     """
@@ -102,12 +104,12 @@ class GitService:
                     "error": str(e),
                     "error_type": type(e).__name__,
                 }
-                logger.error(
+                logger.exception(
                     "Git clone failed",
                     extra=context,
-                    exc_info=True,
                 )
-                raise GitError(f"Failed to clone repository: {e}", context=context) from e
+                msg = f"Failed to clone repository: {e}"
+                raise GitError(msg, context=context) from e
         else:
             logger.info(
                 "Opening existing vault",
@@ -170,12 +172,12 @@ class GitService:
                 "error_type": type(e).__name__,
                 "vault_path": str(self.vault_path),
             }
-            logger.error(
+            logger.exception(
                 "Git pull failed",
                 extra=context,
-                exc_info=True,
             )
-            raise GitError(f"Pull failed: {e}", context=context) from e
+            msg = f"Pull failed: {e}"
+            raise GitError(msg, context=context) from e
 
     def get_changed_files(self) -> list[str]:
         """
@@ -190,12 +192,8 @@ class GitService:
             return []
 
         try:
-            # Get untracked and modified files
-            changed = []
-
             # Modified and staged files
-            for item in self._repo.index.diff(None):
-                changed.append(item.a_path)
+            changed = [item.a_path for item in self._repo.index.diff(None) if item.a_path]
 
             # Untracked files
             changed.extend(self._repo.untracked_files)
@@ -225,7 +223,7 @@ class GitService:
             logger.debug(
                 "Git disabled - skipping commit",
                 extra={
-                    "message": message,
+                    "commit_message": message,
                 },
             )
             return
@@ -252,7 +250,7 @@ class GitService:
             logger.debug(
                 "Git commit completed",
                 extra={
-                    "message": message,
+                    "commit_message": message,
                     "files_count": len(paths),
                 },
             )
@@ -266,12 +264,12 @@ class GitService:
                 "error_type": type(e).__name__,
                 "vault_path": str(self.vault_path),
             }
-            logger.error(
+            logger.exception(
                 "Git commit failed",
                 extra=context,
-                exc_info=True,
             )
-            raise GitError(f"Commit failed: {e}", context=context) from e
+            msg = f"Commit failed: {e}"
+            raise GitError(msg, context=context) from e
 
     def push(self) -> None:
         """
@@ -321,12 +319,12 @@ class GitService:
                 "error_type": type(e).__name__,
                 "vault_path": str(self.vault_path),
             }
-            logger.error(
+            logger.exception(
                 "Git push failed",
                 extra=context,
-                exc_info=True,
             )
-            raise GitError(f"Push failed: {e}", context=context) from e
+            msg = f"Push failed: {e}"
+            raise GitError(msg, context=context) from e
 
     def commit_and_push(self, message: str, paths: list[str]) -> None:
         """
@@ -401,13 +399,12 @@ class GitService:
             return True
 
         except GitError as e:
-            logger.error(
+            logger.exception(
                 "Auto-commit and push failed",
                 extra={
                     "error": str(e),
                     "error_type": type(e).__name__,
                 },
-                exc_info=True,
             )
             raise
         except Exception as e:
@@ -418,9 +415,8 @@ class GitService:
                 "error_type": type(e).__name__,
                 "vault_path": str(self.vault_path),
             }
-            logger.error(
+            logger.exception(
                 "Unexpected error during auto-commit",
                 extra=context,
-                exc_info=True,
             )
             raise GitError(error_msg, context=context) from e

@@ -69,7 +69,9 @@ async def test_create_session(session_manager, mock_agent_service, mock_client):
 
 
 @pytest.mark.asyncio
-async def test_attach_detach_websocket(session_manager, mock_agent_service, mock_client, mock_connection_manager):
+async def test_attach_detach_websocket(
+    session_manager, mock_agent_service, mock_client, mock_connection_manager
+):
     """Test WebSocket attachment lifecycle."""
     mock_agent_service.create_client_instance.return_value = mock_client
 
@@ -78,7 +80,9 @@ async def test_attach_detach_websocket(session_manager, mock_agent_service, mock
     session_manager.sessions["test-session"] = state
 
     # Attach WebSocket
-    buffered = await session_manager.attach_websocket("test-session", "ws-1", mock_connection_manager)
+    buffered = await session_manager.attach_websocket(
+        "test-session", "ws-1", mock_connection_manager
+    )
 
     assert state.connected_ws_id == "ws-1"
     assert buffered == []
@@ -97,13 +101,17 @@ async def test_attach_detach_websocket(session_manager, mock_agent_service, mock
 
 
 @pytest.mark.asyncio
-async def test_message_buffering(session_manager, mock_agent_service, mock_client, mock_connection_manager):
+async def test_message_buffering(
+    session_manager, mock_agent_service, mock_client, mock_connection_manager
+):
     """Test message buffering during disconnect."""
     mock_agent_service.create_client_instance.return_value = mock_client
-    mock_agent_service.process_message_stream.return_value = iter([
-        {"type": "text", "chunk": "Hello"},
-        {"type": "complete", "status": "success", "cost_usd": 0.01, "duration_ms": 1000},
-    ])
+    mock_agent_service.process_message_stream.return_value = iter(
+        [
+            {"type": "text", "chunk": "Hello"},
+            {"type": "complete", "status": "success", "cost_usd": 0.01, "duration_ms": 1000},
+        ]
+    )
 
     # Create session (not attached)
     state = await session_manager.get_or_create_session("test-session")
@@ -116,7 +124,9 @@ async def test_message_buffering(session_manager, mock_agent_service, mock_clien
     await asyncio.sleep(0.1)
 
     # Attach and check buffer
-    buffered = await session_manager.attach_websocket("test-session", "ws-1", mock_connection_manager)
+    buffered = await session_manager.attach_websocket(
+        "test-session", "ws-1", mock_connection_manager
+    )
 
     # Buffer should have been drained
     assert len(buffered) == 0  # Already drained on attach
@@ -165,7 +175,9 @@ async def test_session_timeout(session_manager, mock_agent_service, mock_client)
     session_manager.sessions["test-session"] = state
 
     # Simulate old activity
-    state.last_activity = datetime.now(UTC) - timedelta(seconds=AgentSessionManager.TIMEOUT_SECONDS + 10)
+    state.last_activity = datetime.now(UTC) - timedelta(
+        seconds=AgentSessionManager.TIMEOUT_SECONDS + 10
+    )
 
     # Run cleanup
     await session_manager._cleanup_loop.__wrapped__(session_manager)
@@ -175,7 +187,9 @@ async def test_session_timeout(session_manager, mock_agent_service, mock_client)
 
 
 @pytest.mark.asyncio
-async def test_connection_exclusivity(session_manager, mock_agent_service, mock_client, mock_connection_manager):
+async def test_connection_exclusivity(
+    session_manager, mock_agent_service, mock_client, mock_connection_manager
+):
     """Test single client enforcement."""
     mock_agent_service.create_client_instance.return_value = mock_client
 
@@ -203,7 +217,9 @@ async def test_connection_exclusivity(session_manager, mock_agent_service, mock_
 
 
 @pytest.mark.asyncio
-async def test_reconnect_buffer_replay(session_manager, mock_agent_service, mock_client, mock_connection_manager):
+async def test_reconnect_buffer_replay(
+    session_manager, mock_agent_service, mock_client, mock_connection_manager
+):
     """Test buffer drain on reconnect."""
     mock_agent_service.create_client_instance.return_value = mock_client
 
@@ -216,7 +232,9 @@ async def test_reconnect_buffer_replay(session_manager, mock_agent_service, mock
     state.message_buffer.append({"type": "text", "chunk": "msg2"})
 
     # Attach WebSocket
-    buffered = await session_manager.attach_websocket("test-session", "ws-1", mock_connection_manager)
+    buffered = await session_manager.attach_websocket(
+        "test-session", "ws-1", mock_connection_manager
+    )
 
     # Should replay buffer
     assert len(buffered) == 2

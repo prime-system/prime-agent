@@ -1,4 +1,5 @@
 """CORS security tests to prevent cross-origin vulnerabilities."""
+
 import pytest
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -262,7 +263,9 @@ class TestCORSConfiguration:
         from app.config import Settings
 
         # Empty origins in production (when base_url not set) should raise an error
-        with pytest.raises(ValueError, match="Production environment has no CORS origins configured"):
+        with pytest.raises(
+            ValueError, match="Production environment has no CORS origins configured"
+        ):
             settings_obj = Settings(
                 auth_token="test-token",
                 anthropic_api_key="test-key",

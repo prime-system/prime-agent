@@ -36,6 +36,7 @@ async def reset_vault_lock_after_test():
     """
     yield
     from app.services.lock import reset_lock_for_testing
+
     await reset_lock_for_testing()
 
 
@@ -110,12 +111,17 @@ def client(temp_vault, mock_git_service, test_app):
     from app.services.logs import LogService
     from app.services.claude_session_api import ClaudeSessionAPI
     from app.services.health import HealthCheckService
+    from app.services.command import CommandService
+    from app.services.relay_client import PrimePushRelayClient
+    from app.services.agent_identity import AgentIdentityService
     from app.config import settings
 
     vault_service = VaultService(str(temp_vault))
     vault_service.ensure_structure()
     inbox_service = InboxService()
-    log_service = LogService(logs_dir=vault_service.logs_path(), vault_path=vault_service.vault_path)
+    log_service = LogService(
+        logs_dir=vault_service.logs_path(), vault_path=vault_service.vault_path
+    )
     chat_session_manager = ChatSessionManager(
         vault_path=str(temp_vault),
         claude_home="/tmp/test-claude",
@@ -126,9 +132,11 @@ def client(temp_vault, mock_git_service, test_app):
     health_service = HealthCheckService(
         vault_service=vault_service,
         git_service=mock_git_service,
-        apn_service=None,
         version="test-version",
     )
+    relay_client = MagicMock(spec=PrimePushRelayClient)
+    command_service = CommandService(str(vault_service.vault_path))
+    agent_identity_service = MagicMock(spec=AgentIdentityService)
 
     # Initialize container with mocked services
     init_container(
@@ -140,9 +148,11 @@ def client(temp_vault, mock_git_service, test_app):
         chat_session_manager=chat_session_manager,
         agent_chat_service=agent_chat_service,
         agent_session_manager=agent_session_manager,
-        apn_service=None,
+        relay_client=relay_client,
         claude_session_api=claude_session_api,
         health_service=health_service,
+        command_service=command_service,
+        agent_identity_service=agent_identity_service,
     )
 
     with TestClient(test_app) as c:

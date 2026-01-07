@@ -1,89 +1,120 @@
 """Tests for title generation service."""
 
-from unittest.mock import MagicMock, patch
+from collections.abc import AsyncIterator
+from unittest.mock import patch
 
 import pytest
 
+from app.services import title_generator
 from app.services.title_generator import TitleGenerator
 
 
 @pytest.fixture
-def mock_query():
+def mock_query(monkeypatch):
     """Mock the claude_agent_sdk.query function."""
+
+    class DummyResultMessage:
+        def __init__(self, structured_output: dict[str, str]):
+            self.structured_output = structured_output
+
+    monkeypatch.setattr(title_generator, "ResultMessage", DummyResultMessage)
     with patch("app.services.title_generator.query") as mock:
         yield mock
+
+
+def _message_generator(message: object | None) -> AsyncIterator[object]:
+    async def _generator() -> AsyncIterator[object]:
+        if message is not None:
+            yield message
+
+    return _generator()
 
 
 class TestTitleGenerator:
     """Tests for TitleGenerator service."""
 
-    def test_generate_title_basic(self, mock_query):
+    @pytest.mark.asyncio
+    async def test_generate_title_basic(self, mock_query):
         """Generate title from simple text."""
-        mock_query.return_value = "meeting-notes-with-team"
+        message = title_generator.ResultMessage({"title": "meeting-notes-with-team"})
+        mock_query.return_value = _message_generator(message)
 
         generator = TitleGenerator()
-        title = generator.generate_title("We had a great meeting with the team today")
+        title = await generator.generate_title("We had a great meeting with the team today")
 
         assert title == "meeting-notes-with-team"
         assert mock_query.called
 
-    def test_generate_title_sanitizes_output(self, mock_query):
+    @pytest.mark.asyncio
+    async def test_generate_title_sanitizes_output(self, mock_query):
         """Title is sanitized to be filesystem-safe."""
-        mock_query.return_value = "My Meeting Notes!!!"
+        message = title_generator.ResultMessage({"title": "My Meeting Notes!!!"})
+        mock_query.return_value = _message_generator(message)
 
         generator = TitleGenerator()
-        title = generator.generate_title("Some text")
+        title = await generator.generate_title("Some text")
 
         # Should be lowercase, no special chars, hyphens instead of spaces
         assert title == "my-meeting-notes"
 
-    def test_generate_title_removes_quotes(self, mock_query):
+    @pytest.mark.asyncio
+    async def test_generate_title_removes_quotes(self, mock_query):
         """Quotes are removed from title."""
-        mock_query.return_value = '"shopping-list"'
+        message = title_generator.ResultMessage({"title": '"shopping-list"'})
+        mock_query.return_value = _message_generator(message)
 
         generator = TitleGenerator()
-        title = generator.generate_title("Need to buy groceries")
+        title = await generator.generate_title("Need to buy groceries")
 
         assert title == "shopping-list"
 
-    def test_generate_title_max_length(self, mock_query):
+    @pytest.mark.asyncio
+    async def test_generate_title_max_length(self, mock_query):
         """Title is truncated to max length."""
-        mock_query.return_value = "this-is-a-very-long-title-that-should-be-truncated"
+        message = title_generator.ResultMessage(
+            {"title": "this-is-a-very-long-title-that-should-be-truncated"}
+        )
+        mock_query.return_value = _message_generator(message)
 
         generator = TitleGenerator()
-        title = generator.generate_title("Some text", max_length=20)
+        title = await generator.generate_title("Some text", max_length=20)
 
         assert len(title) <= 20
         assert not title.endswith("-")  # No trailing hyphens
 
-    def test_generate_title_fallback_on_error(self, mock_query):
+    @pytest.mark.asyncio
+    async def test_generate_title_fallback_on_error(self, mock_query):
         """Fallback to simple title on API error."""
         mock_query.side_effect = Exception("API error")
 
         generator = TitleGenerator()
-        title = generator.generate_title("Meeting with the development team tomorrow")
+        title = await generator.generate_title("Meeting with the development team tomorrow")
 
         # Should use fallback (first few words)
         assert title  # Not empty
         assert len(title) <= 50  # Within max length
         assert "-" in title  # Words separated by hyphens
 
-    def test_generate_title_empty_response(self, mock_query):
+    @pytest.mark.asyncio
+    async def test_generate_title_empty_response(self, mock_query):
         """Handle empty response from API."""
-        mock_query.return_value = ""
+        message = title_generator.ResultMessage({"title": ""})
+        mock_query.return_value = _message_generator(message)
 
         generator = TitleGenerator()
-        title = generator.generate_title("Some text")
+        title = await generator.generate_title("Some text")
 
         # Should use fallback
         assert title == "untitled" or title.startswith("some-text")
 
-    def test_generate_title_too_short_response(self, mock_query):
+    @pytest.mark.asyncio
+    async def test_generate_title_too_short_response(self, mock_query):
         """Handle very short response from API."""
-        mock_query.return_value = "ab"
+        message = title_generator.ResultMessage({"title": "ab"})
+        mock_query.return_value = _message_generator(message)
 
         generator = TitleGenerator()
-        title = generator.generate_title("Some text")
+        title = await generator.generate_title("Some text")
 
         # Should use fallback since < 3 chars
         assert title == "untitled" or len(title) >= 3

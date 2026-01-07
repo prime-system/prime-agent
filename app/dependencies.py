@@ -22,11 +22,11 @@ if TYPE_CHECKING:
     from app.services.relay_client import PrimePushRelayClient
     from app.services.vault import VaultService
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 
 async def verify_token(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> None:
     """
     Verify the bearer token matches configured AUTH_TOKEN.
@@ -34,6 +34,12 @@ async def verify_token(
     Uses the dynamic settings proxy to get the current auth_token,
     which may have been reloaded from config.yaml.
     """
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
     if credentials.credentials != settings.auth_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

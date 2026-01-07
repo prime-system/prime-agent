@@ -8,16 +8,17 @@ from __future__ import annotations
 
 import inspect
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable  # noqa: TC003
 from functools import wraps
-from typing import Any, TypeVar
+from typing import ParamSpec, TypeVar, cast
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
-def log_errors(operation_name: str) -> Callable[[Callable[..., T]], Callable[..., T]]:
+def log_errors(operation_name: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     Decorator to log errors with context.
 
@@ -38,11 +39,11 @@ def log_errors(operation_name: str) -> Callable[[Callable[..., T]], Callable[...
             repo.push()
     """
 
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
         @wraps(func)
-        async def async_wrapper(*args: Any, **kwargs: Any) -> T:
+        async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             try:
-                return await func(*args, **kwargs)
+                return await cast("Callable[P, Awaitable[R]]", func)(*args, **kwargs)
             except Exception as e:
                 logger.exception(
                     f"Error in {operation_name}",
@@ -55,7 +56,7 @@ def log_errors(operation_name: str) -> Callable[[Callable[..., T]], Callable[...
                 raise
 
         @wraps(func)
-        def sync_wrapper(*args: Any, **kwargs: Any) -> T:
+        def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             try:
                 return func(*args, **kwargs)
             except Exception as e:
@@ -70,17 +71,17 @@ def log_errors(operation_name: str) -> Callable[[Callable[..., T]], Callable[...
                 raise
 
         if inspect.iscoroutinefunction(func):
-            return async_wrapper  # type: ignore[return-value]
-        return sync_wrapper  # type: ignore[return-value]
+            return cast("Callable[P, R]", async_wrapper)
+        return sync_wrapper
 
     return decorator
 
 
 def with_error_context(
-    func: Callable[..., T],
+    func: Callable[..., R],
     operation: str,
     context: dict[str, object],
-) -> T:
+) -> R:
     """
     Execute a function with error context logging.
 

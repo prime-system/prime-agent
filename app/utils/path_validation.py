@@ -10,7 +10,6 @@ class PathValidationError(ValueError):
     """Raised when path validation fails."""
 
 
-
 def validate_path_within_vault(
     path: str | Path,
     vault_root: Path,
@@ -49,9 +48,8 @@ def validate_path_within_vault(
         try:
             path.relative_to(vault_root_resolved)
         except ValueError:
-            raise PathValidationError(
-                f"Absolute path {path} is outside vault root {vault_root_resolved}"
-            )
+            msg = f"Absolute path {path} is outside vault root {vault_root_resolved}"
+            raise PathValidationError(msg)
         full_path = path
     else:
         full_path = vault_root_resolved / path
@@ -60,14 +58,14 @@ def validate_path_within_vault(
     if not allow_symlinks:
         # Check if the path itself is a symlink
         if full_path.is_symlink():
-            raise PathValidationError(f"Symlink not allowed: {full_path}")
+            msg = f"Symlink not allowed: {full_path}"
+            raise PathValidationError(msg)
         # Also check parent directories for symlinks
         try:
             for parent in full_path.parents:
                 if parent.is_symlink():
-                    raise PathValidationError(
-                        f"Symlink in path not allowed: {parent}"
-                    )
+                    msg = f"Symlink in path not allowed: {parent}"
+                    raise PathValidationError(msg)
         except (OSError, RuntimeError):
             pass  # Some paths may not be accessible
 
@@ -75,15 +73,15 @@ def validate_path_within_vault(
     try:
         resolved_path = full_path.resolve()
     except (OSError, RuntimeError) as e:
-        raise PathValidationError(f"Cannot resolve path: {e}")
+        msg = f"Cannot resolve path: {e}"
+        raise PathValidationError(msg)
 
     # Check if resolved path is within vault
     try:
         resolved_path.relative_to(vault_root_resolved)
     except ValueError:
-        raise PathValidationError(
-            f"Path {resolved_path} is outside vault root {vault_root_resolved}"
-        )
+        msg = f"Path {resolved_path} is outside vault root {vault_root_resolved}"
+        raise PathValidationError(msg)
 
     return resolved_path
 
@@ -121,7 +119,7 @@ def validate_folder_name(folder: str, vault_root: Path) -> Path:
         raise PathValidationError(msg)
 
     # Check for absolute paths
-    if folder.startswith("/") or folder.startswith("\\"):
+    if folder.startswith(("/", "\\")):
         msg = "Folder name must be relative"
         raise PathValidationError(msg)
 
@@ -140,15 +138,15 @@ def validate_folder_name(folder: str, vault_root: Path) -> Path:
     try:
         resolved_folder = folder_path.resolve()
     except (OSError, RuntimeError) as e:
-        raise PathValidationError(f"Cannot resolve folder path: {e}")
+        msg = f"Cannot resolve folder path: {e}"
+        raise PathValidationError(msg)
 
     # Final validation: ensure it stays within vault
     try:
         resolved_folder.relative_to(vault_root_resolved)
     except ValueError:
-        raise PathValidationError(
-            f"Folder {folder} resolves outside vault root"
-        )
+        msg = f"Folder {folder} resolves outside vault root"
+        raise PathValidationError(msg)
 
     return resolved_folder
 
@@ -242,10 +240,10 @@ def validate_session_id(session_id: str) -> str:
     uuid_pattern = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
     safe_id_pattern = r"^[a-zA-Z0-9._-]+$"
 
-    if not (re.match(uuid_pattern, session_id, re.IGNORECASE) or re.match(safe_id_pattern, session_id)):
+    if not (
+        re.match(uuid_pattern, session_id, re.IGNORECASE) or re.match(safe_id_pattern, session_id)
+    ):
         msg = "Session ID must be UUID format or contain only alphanumeric characters, hyphens, underscores, and dots"
-        raise PathValidationError(
-            msg
-        )
+        raise PathValidationError(msg)
 
     return session_id

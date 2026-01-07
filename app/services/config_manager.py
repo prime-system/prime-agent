@@ -10,7 +10,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from collections.abc import Callable  # noqa: TC003
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 import yaml
 from pydantic import ValidationError
@@ -19,19 +21,27 @@ logger = logging.getLogger(__name__)
 
 # Avoid circular import: defer importing Settings and expand_env_vars
 # They are only needed inside methods, not at module level
-Settings: type | None = None
-expand_env_vars: object = None
+if TYPE_CHECKING:
+    from app.config import Settings as SettingsType
+else:
+    SettingsType: TypeAlias = Any
+
+_settings_cls: type[SettingsType] | None = None
+_expand_env_vars: Callable[[str], str] | None = None
+_derive_cors_origins: Callable[[str | None, str], list[str]] | None = None
 
 
 def _ensure_imports() -> None:
     """Ensure Settings and expand_env_vars are imported (deferred to avoid circular import)."""
-    global Settings, expand_env_vars
-    if Settings is None or expand_env_vars is None:
-        from app.config import Settings as _Settings
-        from app.config import expand_env_vars as _expand_env_vars
+    global _settings_cls, _expand_env_vars, _derive_cors_origins
+    if _settings_cls is None or _expand_env_vars is None or _derive_cors_origins is None:
+        from app.config import Settings  # noqa: I001
+        from app.config import _get_cors_origins_from_base_url
+        from app.config import expand_env_vars as expand_env_vars_func
 
-        Settings = _Settings
-        expand_env_vars = _expand_env_vars
+        _settings_cls = Settings
+        _expand_env_vars = expand_env_vars_func
+        _derive_cors_origins = _get_cors_origins_from_base_url
 
 
 class ConfigManager:
@@ -64,7 +74,7 @@ class ConfigManager:
             config_path = os.environ.get("CONFIG_PATH", "/app/config.yaml")
 
         self.config_path = Path(config_path)
-        self._current_settings: Settings | None = None  # type: ignore[assignment]
+        self._current_settings: SettingsType | None = None
         self._last_mtime: float | None = None
         self._lock: asyncio.Lock | None = None
 
@@ -74,7 +84,7 @@ class ConfigManager:
     def _get_lock(self) -> asyncio.Lock | None:
         """Get the lock if it exists and event loop is running."""
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             # Ensure lock is created in this event loop
             if self._lock is None:
                 self._lock = asyncio.Lock()
@@ -83,7 +93,7 @@ class ConfigManager:
             # No event loop running (sync context) - skip lock
             return None
 
-    def _load_config(self) -> None:
+    def _load_config(self) -> None:  # noqa: PLR0911
         """
         Load configuration from YAML file with atomic operations.
 
@@ -142,12 +152,19 @@ class ConfigManager:
 
             # Skip reload if mtime unchanged (file hasn't been modified)
             if self._last_mtime is not None and current_mtime == self._last_mtime:
-                logger.debug("Config file unchanged, skipping reload", extra={"path": str(self.config_path)})
+                logger.debug(
+                    "Config file unchanged, skipping reload", extra={"path": str(self.config_path)}
+                )
                 return
 
             # Expand environment variables
             try:
-                expanded_config = expand_env_vars(config_str)
+                if _expand_env_vars is None:
+                    _ensure_imports()
+                if _expand_env_vars is None:
+                    msg = "expand_env_vars not initialized"
+                    raise RuntimeError(msg)
+                expanded_config = _expand_env_vars(config_str)
             except KeyError as e:
                 msg = f"Error expanding environment variables in config.yaml: {e}"
                 if self._current_settings is None:
@@ -177,7 +194,12 @@ class ConfigManager:
 
             # Create Settings object
             try:
-                new_settings = Settings(**flat_config)
+                if _settings_cls is None:
+                    _ensure_imports()
+                if _settings_cls is None:
+                    msg = "Settings class not initialized"
+                    raise RuntimeError(msg)
+                new_settings = _settings_cls(**flat_config)
             except ValidationError as e:
                 msg = f"Configuration validation error: {e}"
                 if self._current_settings is None:
@@ -206,7 +228,7 @@ class ConfigManager:
                 extra={
                     "path": str(self.config_path),
                     "mtime": current_mtime,
-                }
+                },
             )
 
         except Exception as e:
@@ -218,11 +240,15 @@ class ConfigManager:
                 extra={"error_type": type(e).__name__},
             )
 
-    def _flatten_config(self, config_dict: dict) -> dict:
+    def _flatten_config(self, config_dict: dict[str, Any]) -> dict[str, Any]:
         """Flatten nested YAML structure to Settings field format."""
-        flat_config = {}
+        flat_config: dict[str, Any] = {}
 
-        if "vault" in config_dict and isinstance(config_dict["vault"], dict) and "path" in config_dict["vault"]:
+        if (
+            "vault" in config_dict
+            and isinstance(config_dict["vault"], dict)
+            and "path" in config_dict["vault"]
+        ):
             flat_config["vault_path"] = config_dict["vault"]["path"]
 
         if "workspace" in config_dict and isinstance(config_dict["workspace"], dict):
@@ -242,13 +268,42 @@ class ConfigManager:
             flat_config["anthropic_api_key"] = config_dict["anthropic"].get("api_key")
             flat_config["anthropic_base_url"] = config_dict["anthropic"].get("base_url")
             flat_config["agent_model"] = config_dict["anthropic"].get("model")
-            flat_config["agent_max_budget_usd"] = config_dict["anthropic"].get("max_budget_usd", 2.0)
+            flat_config["agent_max_budget_usd"] = config_dict["anthropic"].get(
+                "max_budget_usd", 2.0
+            )
 
         if "auth" in config_dict and isinstance(config_dict["auth"], dict):
             flat_config["auth_token"] = config_dict["auth"].get("token")
 
         if "logging" in config_dict and isinstance(config_dict["logging"], dict):
             flat_config["log_level"] = config_dict["logging"].get("level", "INFO")
+
+        # Base URL configuration
+        if "base_url" in config_dict:
+            flat_config["base_url"] = config_dict.get("base_url")
+
+        # Environment mode
+        environment = config_dict.get("environment", "development")
+        flat_config["environment"] = environment
+
+        # CORS configuration - auto-derive from base_url when not explicitly set
+        if "cors" in config_dict and isinstance(config_dict["cors"], dict):
+            flat_config["cors_enabled"] = config_dict["cors"].get("enabled", True)
+            if "allowed_origins" in config_dict["cors"]:
+                flat_config["cors_allowed_origins"] = config_dict["cors"]["allowed_origins"]
+            if "allowed_methods" in config_dict["cors"]:
+                flat_config["cors_allowed_methods"] = config_dict["cors"]["allowed_methods"]
+            if "allowed_headers" in config_dict["cors"]:
+                flat_config["cors_allowed_headers"] = config_dict["cors"]["allowed_headers"]
+        else:
+            flat_config["cors_enabled"] = True
+
+        if "cors_allowed_origins" not in flat_config:
+            if _derive_cors_origins is None:
+                _ensure_imports()
+            if _derive_cors_origins is not None:
+                base_url = flat_config.get("base_url")
+                flat_config["cors_allowed_origins"] = _derive_cors_origins(base_url, environment)
 
         # Data directory
         if "storage" in config_dict and isinstance(config_dict["storage"], dict):
@@ -305,7 +360,7 @@ class ConfigManager:
 
         return False
 
-    def get_settings(self) -> Settings:
+    def get_settings(self) -> SettingsType:
         """
         Get current settings, reloading if config file has changed.
 

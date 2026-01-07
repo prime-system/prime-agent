@@ -5,7 +5,7 @@ import logging
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from app.config import Settings, get_config_manager, settings
+from app.config import get_config_manager, settings
 from app.dependencies import get_agent_identity_service, get_vault_service, verify_token
 from app.services.agent_identity import AgentIdentityService
 from app.services.vault import VaultService
@@ -21,7 +21,9 @@ class FeaturesResponse(BaseModel):
 
     git_enabled: bool = Field(description="Whether Git sync is configured and available")
     workspaces_enabled: bool = Field(description="Whether workspace/vault switching is supported")
-    custom_process_prompt: bool = Field(description="Whether user has customized the processCapture prompt")
+    custom_process_prompt: bool = Field(
+        description="Whether user has customized the processCapture prompt"
+    )
 
 
 class ServerInfoResponse(BaseModel):
@@ -57,9 +59,7 @@ async def get_config(
 
     # Check if user has created a custom processCapture.md in vault
     # If not, agent will use the default template from app/prompts/
-    custom_process_prompt = (
-        vault_path / ".claude" / "commands" / "processCapture.md"
-    ).exists()
+    custom_process_prompt = (vault_path / ".claude" / "commands" / "processCapture.md").exists()
 
     return ConfigResponse(
         features=FeaturesResponse(
