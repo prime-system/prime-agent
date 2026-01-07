@@ -39,9 +39,9 @@ RUN uv sync --frozen --no-dev
 
 # Copy application code and configuration template
 COPY --chown=${APP_USER}:${APP_USER} app/ app/
-COPY --chown=${APP_USER}:${APP_USER} scripts/ /app/scripts/
+COPY --chown=${APP_USER}:${APP_USER} scripts/app/ /app/scripts/
 COPY --chown=${APP_USER}:${APP_USER} config.default.yaml /app/config.default.yaml
-COPY --chown=root:root scripts/entrypoint.sh /entrypoint.sh
+COPY --chown=root:root scripts/app/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Switch to non-root user to configure Git
