@@ -106,12 +106,12 @@ async def test_message_buffering(
 ):
     """Test message buffering during disconnect."""
     mock_agent_service.create_client_instance.return_value = mock_client
-    mock_agent_service.process_message_stream.return_value = iter(
-        [
-            {"type": "text", "chunk": "Hello"},
-            {"type": "complete", "status": "success", "cost_usd": 0.01, "duration_ms": 1000},
-        ]
-    )
+
+    async def _message_stream():
+        yield {"type": "text", "chunk": "Hello"}
+        yield {"type": "complete", "status": "success", "cost_usd": 0.01, "duration_ms": 1000}
+
+    mock_agent_service.process_message_stream = lambda *_args, **_kwargs: _message_stream()
 
     # Create session (not attached)
     state = await session_manager.get_or_create_session("test-session")
@@ -128,8 +128,10 @@ async def test_message_buffering(
         "test-session", "ws-1", mock_connection_manager
     )
 
-    # Buffer should have been drained
-    assert len(buffered) == 0  # Already drained on attach
+    # Buffered messages should be delivered on attach
+    assert len(buffered) == 2
+    assert buffered[0]["type"] == "text"
+    assert buffered[1]["type"] == "complete"
 
     # Cleanup
     state.processing_task.cancel()
