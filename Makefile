@@ -133,7 +133,7 @@ ifndef VERSION
 	@echo "Usage: make release VERSION=0.2.0"
 	@exit 1
 endif
-	@./scripts/create-release.sh $(VERSION)
+	@./scripts/dev/create-release.sh $(VERSION)
 
 release-push:
 ifndef VERSION
@@ -141,4 +141,4 @@ ifndef VERSION
 	@echo "Usage: make release-push VERSION=0.2.0"
 	@exit 1
 endif
-	@./scripts/create-release.sh $(VERSION) --push
+	@./scripts/dev/create-release.sh $(VERSION) --push
