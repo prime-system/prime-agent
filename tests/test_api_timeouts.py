@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.services.agent import AgentService
-from app.services.apn_service import APNService
 from app.services.git import GitService
+from app.services.relay_client import PrimePushRelayClient
 
 
 class TestAgentServiceTimeout:
@@ -85,100 +85,41 @@ class TestAgentServiceTimeout:
         assert agent2.timeout_seconds == 300
 
 
-class TestAPNServiceTimeout:
-    """Tests for APNs service timeouts."""
+class TestRelayClientTimeout:
+    """Tests for relay client timeouts."""
 
     @pytest.mark.asyncio
-    async def test_apns_send_timeout(self, tmp_path: Path) -> None:
-        """Verify APNs send respects timeout."""
-        devices_file = tmp_path / "devices.json"
-        devices_file.write_text('{"devices": []}')
+    async def test_relay_timeout_passed_to_httpx(self) -> None:
+        """Verify relay client passes timeout to httpx."""
+        client = PrimePushRelayClient(timeout_seconds=1)
+        push_url = "https://relay.example.com/push/abc123/secret456"
 
-        service = APNService(
-            devices_file=devices_file,
-            key_content="test-key-content",
-            team_id="test-team",
-            key_id="test-key-id",
-            bundle_id="com.test.app",
-            timeout_seconds=1,
-        )
+        with patch("app.services.relay_client.httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = AsyncMock()
+            mock_response = MagicMock()
+            mock_response.raise_for_status = MagicMock()
+            mock_response.json = lambda: {"queued": False}
+            mock_client.post.return_value = mock_response
+            mock_client_class.return_value = mock_client
 
-        # Valid APNs device token format (hex string, 64 chars)
-        valid_token = "a" * 64
-
-        # Mock the send_notification to simulate a slow operation
-        async def slow_send(*args, **kwargs):
-            await asyncio.sleep(2)  # Slower than timeout
-
-        with patch.object(service.client, "send_notification", side_effect=slow_send):
-            result = await service.send_to_device(
-                device_token=valid_token,
+            await client.send_push(
+                push_url=push_url,
                 title="Test",
                 body="Test",
             )
 
-        # Should fail due to timeout
-        assert result["success"] is False
-        assert "timed out" in result["error"].lower()
+            mock_client_class.assert_called_once_with(timeout=1)
 
     @pytest.mark.asyncio
-    async def test_apns_send_completes_before_timeout(self, tmp_path: Path) -> None:
-        """Verify APNs send completes successfully within timeout."""
-        devices_file = tmp_path / "devices.json"
-        devices_file.write_text('{"devices": []}')
+    async def test_relay_timeout_configurable(self) -> None:
+        """Verify relay client timeout is configurable."""
+        client1 = PrimePushRelayClient(timeout_seconds=3)
+        assert client1.timeout == 3
 
-        service = APNService(
-            devices_file=devices_file,
-            key_content="test-key-content",
-            team_id="test-team",
-            key_id="test-key-id",
-            bundle_id="com.test.app",
-            timeout_seconds=5,
-        )
-
-        # Valid APNs device token format (hex string, 64 chars)
-        valid_token = "a" * 64
-
-        # Mock the send_notification to return immediately
-        async def fast_send(*args, **kwargs):
-            await asyncio.sleep(0.1)  # Fast operation
-
-        with patch.object(service.client, "send_notification", side_effect=fast_send):
-            result = await service.send_to_device(
-                device_token=valid_token,
-                title="Test",
-                body="Test",
-            )
-
-        # Should succeed
-        assert result["success"] is True
-        assert result["error"] is None
-
-    @pytest.mark.asyncio
-    async def test_apns_timeout_configurable(self, tmp_path: Path) -> None:
-        """Verify APNs timeout is configurable."""
-        devices_file = tmp_path / "devices.json"
-        devices_file.write_text('{"devices": []}')
-
-        service1 = APNService(
-            devices_file=devices_file,
-            key_content="test-key-content",
-            team_id="test-team",
-            key_id="test-key-id",
-            bundle_id="com.test.app",
-            timeout_seconds=3,
-        )
-        assert service1.timeout_seconds == 3
-
-        service2 = APNService(
-            devices_file=devices_file,
-            key_content="test-key-content",
-            team_id="test-team",
-            key_id="test-key-id",
-            bundle_id="com.test.app",
-            timeout_seconds=10,
-        )
-        assert service2.timeout_seconds == 10
+        client2 = PrimePushRelayClient(timeout_seconds=10)
+        assert client2.timeout == 10
 
 
 class TestGitServiceTimeout:
@@ -240,7 +181,6 @@ class TestTimeoutConfiguration:
 
         # Verify defaults
         assert settings.anthropic_timeout_seconds == 1800  # 30 minutes
-        assert settings.apns_timeout_seconds == 5  # 5 seconds
         assert settings.git_timeout_seconds == 30  # 30 seconds
 
     def test_config_timeout_customizable(self) -> None:
@@ -252,12 +192,10 @@ class TestTimeoutConfiguration:
             agent_model="claude-opus-4-5",
             auth_token="test-token",
             anthropic_timeout_seconds=600,
-            apns_timeout_seconds=10,
             git_timeout_seconds=60,
         )
 
         assert settings.anthropic_timeout_seconds == 600
-        assert settings.apns_timeout_seconds == 10
         assert settings.git_timeout_seconds == 60
 
 
@@ -290,36 +228,25 @@ class TestTimeoutErrorHandling:
         assert result["duration_ms"] == 0
 
     @pytest.mark.asyncio
-    async def test_apns_timeout_returns_error_dict(self, tmp_path: Path) -> None:
-        """Verify APNs timeout returns proper error structure."""
-        devices_file = tmp_path / "devices.json"
-        devices_file.write_text('{"devices": []}')
+    async def test_relay_calls_raise_for_status(self) -> None:
+        """Verify relay client checks HTTP status."""
+        client = PrimePushRelayClient(timeout_seconds=1)
+        push_url = "https://relay.example.com/push/abc123/secret456"
 
-        service = APNService(
-            devices_file=devices_file,
-            key_content="test-key-content",
-            team_id="test-team",
-            key_id="test-key-id",
-            bundle_id="com.test.app",
-            timeout_seconds=1,
-        )
+        with patch("app.services.relay_client.httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = AsyncMock()
+            mock_response = MagicMock()
+            mock_response.raise_for_status = MagicMock()
+            mock_response.json = lambda: {"queued": False}
+            mock_client.post.return_value = mock_response
+            mock_client_class.return_value = mock_client
 
-        # Valid APNs device token format
-        valid_token = "a" * 64
-
-        async def slow_send(*args, **kwargs):
-            await asyncio.sleep(2)
-
-        with patch.object(service.client, "send_notification", side_effect=slow_send):
-            result = await service.send_to_device(
-                device_token=valid_token,
+            await client.send_push(
+                push_url=push_url,
                 title="Test",
                 body="Test",
             )
 
-        # Verify error structure
-        assert "success" in result
-        assert "error" in result
-        assert "status" in result
-        assert result["success"] is False
-        assert result["error"] is not None
+            mock_response.raise_for_status.assert_called_once()

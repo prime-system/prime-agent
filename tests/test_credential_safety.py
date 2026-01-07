@@ -8,7 +8,7 @@ information is not exposed in error messages or debug output.
 from __future__ import annotations
 
 import logging
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -91,14 +91,14 @@ class TestRedactionUtility:
     def test_redact_sensitive_data_pattern_matching(self) -> None:
         """Verify pattern-based redaction works correctly."""
         text = (
-            "API Key: api_key=sk-ant-abc123def456 "
+            "API Key: api_key=sk-ant-abc123def456ghi7890 "
             "Token: token=Bearer123456789abcdef "
             "Endpoint: https://api.example.com"
         )
 
         redacted = redact_sensitive_data(text)
 
-        assert "sk-ant-abc123def456" not in redacted
+        assert "sk-ant-abc123def456ghi7890" not in redacted
         assert "Bearer123456789abcdef" not in redacted
         assert "https://api.example.com" in redacted
         assert "[REDACTED_" in redacted
@@ -163,27 +163,37 @@ class TestConfigCredentialSafety:
 class TestLoggingNoCredentials:
     """Tests to ensure logging never captures credentials."""
 
-    def test_no_credentials_in_apn_service_logs(self, caplog: pytest.LogCaptureFixture) -> None:
-        """Verify APNs service doesn't log credentials."""
-        from app.services.apn_service import APNService
+    @pytest.mark.asyncio
+    async def test_no_credentials_in_relay_client_logs(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Verify relay client doesn't log capability secrets."""
+        from app.services.relay_client import PrimePushRelayClient
 
-        with caplog.at_level(logging.DEBUG):
-            try:
-                # Try to instantiate with dummy credentials
-                service = APNService(
-                    devices_file="/tmp/devices",
-                    key_content="dummy_key_content",
-                    team_id="ABC123",
-                    key_id="KEY123",
-                    bundle_id="com.example.app",
-                    environment="production",
+        client = PrimePushRelayClient(timeout_seconds=5)
+        push_url = "https://relay.example.com/push/pushid-123/secret-456"
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json = lambda: {"queued": True}
+            mock_response.raise_for_status = lambda: None
+
+            mock_client = AsyncMock()
+            mock_client.post.return_value = mock_response
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = AsyncMock()
+            mock_client_class.return_value = mock_client
+
+            with caplog.at_level(logging.DEBUG):
+                await client.send_push(
+                    push_url=push_url,
+                    title="Test",
+                    body="Test body",
                 )
-            except Exception:
-                # Expected to fail, but we're checking logs
-                pass
 
         # Verify no sensitive patterns in logs
-        sensitive_patterns = ["dummy_key_content", "team_id: ABC123", "key_id: KEY123"]
+        sensitive_patterns = ["secret-456", push_url]
         for pattern in sensitive_patterns:
             assert pattern not in caplog.text, (
                 f"Found sensitive pattern in logs: {pattern}"

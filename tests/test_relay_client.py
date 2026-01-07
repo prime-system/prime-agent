@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -17,10 +17,11 @@ async def test_send_push_success():
 
     with patch("httpx.AsyncClient") as mock_client_class:
         # Setup mock response (ensure json() is async-ready)
-        mock_response = AsyncMock()
+        mock_response = MagicMock()
         mock_response.status_code = 200
         # Make json() a regular function, not async
         mock_response.json = lambda: {"queued": True}
+        mock_response.raise_for_status = lambda: None
 
         # Setup mock client
         mock_client = AsyncMock()
@@ -52,9 +53,10 @@ async def test_send_push_with_data():
 
     with patch("httpx.AsyncClient") as mock_client_class:
         # Setup mock response
-        mock_response = AsyncMock()
+        mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json = lambda: {"queued": True}
+        mock_response.raise_for_status = lambda: None
 
         # Setup mock client
         mock_client = AsyncMock()
@@ -85,9 +87,10 @@ async def test_send_push_returns_false_when_not_queued():
 
     with patch("httpx.AsyncClient") as mock_client_class:
         # Setup mock response
-        mock_response = AsyncMock()
+        mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json = lambda: {"queued": False}
+        mock_response.raise_for_status = lambda: None
 
         # Setup mock client
         mock_client = AsyncMock()
@@ -112,9 +115,10 @@ async def test_push_id_extraction():
 
     with patch("httpx.AsyncClient") as mock_client_class:
         # Setup mock response
-        mock_response = AsyncMock()
+        mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json = lambda: {"queued": True}
+        mock_response.raise_for_status = lambda: None
 
         # Setup mock client
         mock_client = AsyncMock()
@@ -147,9 +151,10 @@ async def test_timeout_configuration():
 
     with patch("httpx.AsyncClient") as mock_client_class:
         # Setup mock response
-        mock_response = AsyncMock()
+        mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json = lambda: {"queued": True}
+        mock_response.raise_for_status = lambda: None
 
         # Setup mock client
         mock_client = AsyncMock()

@@ -24,8 +24,8 @@ async def test_no_threading_locks_in_async_files() -> None:
     """
     # List of files we know have async code
     async_files = [
-        "app/services/apn_service.py",
         "app/services/device_registry.py",
+        "app/services/relay_client.py",
         "app/api/push.py",
         "app/main.py",
         "app/services/worker.py",
@@ -67,7 +67,7 @@ async def test_asyncio_locks_properly_used() -> None:
     files_to_check = [
         "app/services/background_tasks.py",
         "app/services/agent_session_manager.py",
-        "app/services/apn_service.py",
+        "app/services/device_registry.py",
     ]
 
     for file_path_str in files_to_check:
@@ -242,8 +242,8 @@ def test_ast_check_no_threading_imports() -> None:
     """Static analysis: verify threading module is not imported in core async files."""
     # Core async service files
     files_to_check = [
-        "app/services/apn_service.py",
         "app/services/device_registry.py",
+        "app/services/relay_client.py",
     ]
 
     for file_path_str in files_to_check:
@@ -303,31 +303,10 @@ async def test_config_manager_works_in_async_context() -> None:
 
 
 @pytest.mark.asyncio
-async def test_apn_service_async_methods() -> None:
-    """Test that APNService async methods work correctly."""
-    # This is an integration test verifying async method signatures
-    from app.services.apn_service import APNService
-    from pathlib import Path
-    import tempfile
+async def test_relay_client_async_methods() -> None:
+    """Test that relay client async methods work correctly."""
+    from app.services.relay_client import PrimePushRelayClient
+    import inspect
 
-    # Create a temporary devices file
-    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
-        devices_file = Path(f.name)
-        f.write('{"devices": []}')
-
-    try:
-        # Create APNService (requires valid credentials, so this might fail)
-        # We're just testing that async methods exist and have correct signatures
-        assert hasattr(APNService, "list_devices")
-        assert hasattr(APNService, "get_device_count")
-        assert hasattr(APNService, "send_to_all")
-
-        # Verify they're coroutine functions
-        import inspect
-
-        assert inspect.iscoroutinefunction(APNService.list_devices)
-        assert inspect.iscoroutinefunction(APNService.get_device_count)
-        assert inspect.iscoroutinefunction(APNService.send_to_all)
-
-    finally:
-        devices_file.unlink()
+    assert hasattr(PrimePushRelayClient, "send_push")
+    assert inspect.iscoroutinefunction(PrimePushRelayClient.send_push)
