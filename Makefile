@@ -1,4 +1,4 @@
-.PHONY: help lint format type-check test test-cov coverage-report coverage-check clean install-dev pre-commit-install dev dev-build dev-down dev-logs dev-shell update-lock
+.PHONY: help lint format type-check test test-cov coverage-report coverage-check clean install-dev pre-commit-install dev dev-build dev-down dev-logs dev-shell update-lock release release-push
 
 help:
 	@echo "Available commands:"
@@ -29,6 +29,10 @@ help:
 	@echo "  make install-dev        Install dev dependencies with uv"
 	@echo "  make lint               Run linter on local code"
 	@echo "  make test               Run tests locally"
+	@echo ""
+	@echo "Release:"
+	@echo "  make release VERSION=X.Y.Z       Create new release (update version, commit, tag)"
+	@echo "  make release-push VERSION=X.Y.Z  Create and push new release"
 
 install-dev:
 	uv sync
@@ -86,3 +90,20 @@ dev-logs:
 
 dev-shell:
 	docker compose exec primeai bash
+
+# Release commands
+release:
+ifndef VERSION
+	@echo "Error: VERSION not specified"
+	@echo "Usage: make release VERSION=0.2.0"
+	@exit 1
+endif
+	@./scripts/create-release.sh $(VERSION)
+
+release-push:
+ifndef VERSION
+	@echo "Error: VERSION not specified"
+	@echo "Usage: make release-push VERSION=0.2.0"
+	@exit 1
+endif
+	@./scripts/create-release.sh $(VERSION) --push
