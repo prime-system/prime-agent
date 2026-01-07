@@ -157,9 +157,11 @@ class TestRequestIDMiddleware:
 
         client = TestClient(app)
         test_id = "test-tracing-id-456"
-        response = client.get("/health", headers={"X-Request-ID": test_id})
+        # Use a non-health endpoint to test logging (health endpoints are filtered)
+        response = client.get("/nonexistent-endpoint", headers={"X-Request-ID": test_id})
 
-        assert response.status_code == 200
+        # Endpoint doesn't exist, but middleware still logs it
+        assert response.status_code == 404
 
         # Check that request ID appears in logs
         logs = log_capture.getvalue()
