@@ -182,7 +182,7 @@ async def test_session_timeout(session_manager, mock_agent_service, mock_client)
     )
 
     # Run cleanup
-    await session_manager._cleanup_loop.__wrapped__(session_manager)
+    await session_manager._cleanup_once()
 
     # Session should be terminated
     assert "test-session" not in session_manager.sessions

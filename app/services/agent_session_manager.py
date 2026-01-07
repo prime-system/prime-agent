@@ -6,7 +6,6 @@ enabling sessions to persist across reconnections.
 """
 
 import asyncio
-import functools
 import logging
 from collections import deque
 from dataclasses import dataclass, field
@@ -375,7 +374,6 @@ class AgentSessionManager:
         for session_id in to_terminate:
             await self.terminate_session(session_id)
 
-    @functools.wraps(_cleanup_once)
     async def _cleanup_loop(self) -> None:
         """Background task to cleanup inactive sessions."""
         try:
