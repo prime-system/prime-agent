@@ -294,8 +294,8 @@ class AgentChatService:
 
                             # Auto-commit disabled for chat - rely on periodic pull only
                             # if self.git_service and not message.is_error:
-                            #     logger.info("Auto-committing changes...")
-                            #     self.git_service.auto_commit_and_push()
+                            #     logger.info("Auto-committing changes...")  # noqa: ERA001
+                            #     self.git_service.auto_commit_and_push()  # noqa: ERA001
 
                             yield {
                                 "type": SSEEventType.COMPLETE.value,
