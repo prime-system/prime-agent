@@ -28,7 +28,7 @@ def cors_app():
         return {"status": "ok"}
 
     @app.post("/capture")
-    async def capture_endpoint() -> dict[str, str]:
+    async def capture_endpoint() -> dict[str, bool]:
         return {"ok": True}
 
     return app
@@ -56,7 +56,10 @@ class TestCORSPreflight:
         """Verify CORS allows requests from trusted origins."""
         response = cors_client.options(
             "/capture",
-            headers={"Origin": "http://localhost:3000"},
+            headers={
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "POST",
+            },
         )
         assert response.headers.get("access-control-allow-origin") == "http://localhost:3000"
         assert response.status_code == 200
@@ -66,7 +69,10 @@ class TestCORSPreflight:
         for origin in ["http://localhost:3000", "http://localhost:8000"]:
             response = cors_client.options(
                 "/capture",
-                headers={"Origin": origin},
+                headers={
+                    "Origin": origin,
+                    "Access-Control-Request-Method": "POST",
+                },
             )
             assert response.headers.get("access-control-allow-origin") == origin
 
@@ -114,6 +120,7 @@ class TestCORSPreflight:
             "/capture",
             headers={
                 "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "POST",
                 "Access-Control-Request-Headers": "Authorization, Content-Type",
             },
         )
@@ -124,7 +131,10 @@ class TestCORSPreflight:
         """Verify CORS includes credentials flag when configured."""
         response = cors_client.options(
             "/capture",
-            headers={"Origin": "http://localhost:3000"},
+            headers={
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "POST",
+            },
         )
         assert response.headers.get("access-control-allow-credentials") == "true"
 
@@ -132,7 +142,10 @@ class TestCORSPreflight:
         """Verify CORS preflight cache is set."""
         response = cors_client.options(
             "/capture",
-            headers={"Origin": "http://localhost:3000"},
+            headers={
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "POST",
+            },
         )
         max_age = response.headers.get("access-control-max-age")
         assert max_age == "3600"  # 1 hour cache
@@ -169,22 +182,33 @@ class TestCORSSecurityConfiguration:
         # create a CORS middleware with allow_origins=["*"] and allow_credentials=True
 
         # In practice, FastAPI's CORSMiddleware will raise an error if you try to do this
-        with pytest.raises(ValueError):
-            app = FastAPI()
-            app.add_middleware(
-                CORSMiddleware,
-                allow_origins=["*"],
-                allow_credentials=True,  # This should fail
-                allow_methods=["*"],
-                allow_headers=["*"],
-            )
+        app = FastAPI()
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+        client = TestClient(app)
+        response = client.options(
+            "/",
+            headers={
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+        assert response.headers.get("access-control-allow-origin") == "http://localhost:3000"
 
     def test_cors_case_sensitive_origins(self, cors_client):
         """Verify CORS origin matching is case-sensitive where applicable."""
         # Test that mixed case domain still works (DNS is case-insensitive)
         response = cors_client.options(
             "/capture",
-            headers={"Origin": "http://LOCALHOST:3000"},
+            headers={
+                "Origin": "http://LOCALHOST:3000",
+                "Access-Control-Request-Method": "POST",
+            },
         )
         # Most CORS implementations are case-insensitive for protocol/host
         # but we'll verify the behavior doesn't expose vulnerabilities

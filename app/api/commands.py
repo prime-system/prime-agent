@@ -10,7 +10,6 @@ from fastapi import APIRouter, Depends, HTTPException, Path
 from app.dependencies import verify_token
 from app.exceptions import VaultError
 from app.models.command import CommandDetail, CommandListResponse
-from app.services.container import get_container
 
 if TYPE_CHECKING:
     from app.services.command import CommandService
@@ -31,13 +30,15 @@ def get_command_service() -> CommandService:
         HTTPException: If container not initialized
     """
     try:
-        container = get_container()
+        from app.services import container as container_module
+
+        container = container_module.get_container()
         return container.command_service
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail="Service container not initialized") from e
 
 
-@router.get("", response_model=CommandListResponse)
+@router.get("", response_model=CommandListResponse, response_model_by_alias=False)
 async def list_commands(
     command_service: CommandService = Depends(get_command_service),
 ) -> CommandListResponse:
@@ -90,7 +91,7 @@ async def list_commands(
         ) from e
 
 
-@router.get("/{command_name}", response_model=CommandDetail)
+@router.get("/{command_name}", response_model=CommandDetail, response_model_by_alias=False)
 async def get_command_detail(
     command_name: Annotated[str, Path(description="Command name (without leading slash)")],
     command_service: CommandService = Depends(get_command_service),

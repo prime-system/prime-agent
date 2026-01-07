@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import yaml
-from pydantic import Field, ValidationError, field_validator
+from pydantic import Field, ValidationError, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)

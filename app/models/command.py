@@ -6,7 +6,7 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-from app.models.frontmatter import CommandFrontmatter
+from app.models.frontmatter import CommandFrontmatter  # noqa: TC001
 
 
 class CommandType(str, Enum):

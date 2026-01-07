@@ -120,7 +120,10 @@ class InboxService:
                 return self._get_unprocessed_dumps_python(vault_path, inbox_folder)
 
             if result.returncode == 1:
-                # No unprocessed files found
+                # No files matched - double-check in case grep behavior differs
+                has_md_files = any(inbox_dir.rglob("*.md"))
+                if has_md_files:
+                    return self._get_unprocessed_dumps_python(vault_path, inbox_folder)
                 return []
 
             # Parse each file found by grep
