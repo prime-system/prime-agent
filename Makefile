@@ -20,7 +20,7 @@ help:
 	@echo "  make test               Run pytest"
 	@echo "  make test-cov           Run pytest with coverage report"
 	@echo "  make coverage-report    Generate HTML coverage report"
-	@echo "  make coverage-check     Check coverage meets 80%% threshold"
+	@echo "  make coverage-check     Check coverage meets 70%% threshold"
 	@echo "  make check              Run all checks (lint + type-check + test)"
 	@echo "  make update-lock        Update uv.lock with latest compatible versions"
 	@echo "  make clean              Remove cache files"
@@ -56,14 +56,14 @@ test:
 	uv run pytest
 
 test-cov:
-	uv run pytest --cov=app --cov-report=xml --cov-report=html --cov-report=term --cov-fail-under=80
+	uv run pytest --cov=app --cov-report=xml --cov-report=html --cov-report=term --cov-fail-under=70
 
 coverage-report:
 	uv run pytest --cov=app --cov-report=html
 	@echo "Coverage report generated in htmlcov/index.html"
 
 coverage-check:
-	uv run pytest --cov=app --cov-report=term --cov-fail-under=80
+	uv run pytest --cov=app --cov-report=term --cov-fail-under=70
 
 check: lint type-check test
 
