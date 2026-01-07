@@ -1,5 +1,5 @@
 # PrimeAI: FastAPI Server Container (Python-only)
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # Build arguments
 ARG APP_USER=prime
