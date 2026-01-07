@@ -35,7 +35,7 @@ help:
 	@echo "  make release-push VERSION=X.Y.Z  Create and push new release"
 
 install-dev:
-	uv sync
+	uv sync --all-extras
 
 pre-commit-install: install-dev
 	uv run pre-commit install
@@ -56,7 +56,7 @@ test:
 	uv run pytest
 
 test-cov:
-	uv run pytest --cov=app --cov-report=html --cov-report=term
+	uv run pytest --cov=app --cov-report=xml --cov-report=html --cov-report=term --cov-fail-under=80
 
 coverage-report:
 	uv run pytest --cov=app --cov-report=html
