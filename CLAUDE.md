@@ -326,14 +326,14 @@ base_url: https://app.example.com
 ### Data Flow: Capture → Process → Organize
 
 **Capture Flow** (app/api/capture.py):
-1. POST `/capture` receives raw thought from client
+1. POST `/api/v1/capture` receives raw thought from client
 2. Generate title with Claude Haiku if `{title}` in file pattern
 3. Write to inbox file with YAML frontmatter
 4. Queue git commit in background (non-blocking)
 5. Return immediately to client
 
 **Processing Flow** (app/services/worker.py):
-1. POST `/api/processing/trigger` fires AgentWorker
+1. POST `/api/v1/processing/trigger` fires AgentWorker
 2. Worker acquires `vault_lock` (prevents concurrent processing)
 3. Pulls latest changes from git (if enabled)
 4. Invokes Claude Agent SDK with `/processCapture` prompt
@@ -419,7 +419,7 @@ background_tasks.add_task(
 ```bash
 # Check background task health (requires AUTH_TOKEN)
 curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:8000/api/monitoring/background-tasks/status
+  http://localhost:8000/api/v1/monitoring/background-tasks/status
 
 # Response:
 {
@@ -514,7 +514,7 @@ base_url: https://app.example.com
 **Attack Prevention Example:**
 ```javascript
 // attacker.com/malicious.html
-fetch('https://primeapp.com/capture', {
+fetch('https://primeapp.com/api/v1/capture', {
     method: 'POST',
     credentials: 'include',  // Would be sent in old vulnerable config
     headers: { 'Content-Type': 'application/json' },

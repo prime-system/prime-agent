@@ -118,7 +118,7 @@ PrimeAgent runs at `http://localhost:8000`
 ### Capture a Thought
 
 ```bash
-curl -X POST http://localhost:8000/capture \
+curl -X POST http://localhost:8000/api/v1/capture \
   -H "Authorization: Bearer $AUTH_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -146,14 +146,14 @@ curl -X POST http://localhost:8000/capture \
 Processing is manual - trigger it when ready:
 
 ```bash
-curl -X POST http://localhost:8000/api/processing/trigger \
+curl -X POST http://localhost:8000/api/v1/processing/trigger \
   -H "Authorization: Bearer $AUTH_TOKEN"
 ```
 
 ### Check Processing Status
 
 ```bash
-curl http://localhost:8000/api/processing/status \
+curl http://localhost:8000/api/v1/processing/status \
   -H "Authorization: Bearer $AUTH_TOKEN"
 ```
 
@@ -221,14 +221,14 @@ vault/
 ```
 ┌─────────────┐     ┌──────────────┐     ┌────────────────┐
 │  POST       │────▶│ Write Inbox  │────▶│ Return         │
-│  /capture   │     │  File        │     │  Immediately   │
+│  /api/v1/capture   │     │  File        │     │  Immediately   │
 └─────────────┘     └──────────────┘     └────────────────┘
 
                     (Manual Trigger)
 
 ┌─────────────┐     ┌──────────────┐     ┌────────────────┐
 │  POST       │────▶│ Start Agent  │────▶│ Process All    │
-│  /trigger   │     │  Worker      │     │  Unprocessed   │
+│  /api/v1/processing/trigger   │     │  Worker      │     │  Unprocessed   │
 └─────────────┘     └──────────────┘     └────────────────┘
                                                    │
                                                    ▼
@@ -410,7 +410,7 @@ GET /health
 ### Capture Thought
 
 ```http
-POST /capture
+POST /api/v1/capture
 Authorization: Bearer {AUTH_TOKEN}
 Content-Type: application/json
 ```
@@ -448,7 +448,7 @@ Content-Type: application/json
 ### Trigger Processing
 
 ```http
-POST /api/processing/trigger
+POST /api/v1/processing/trigger
 Authorization: Bearer {AUTH_TOKEN}
 ```
 
@@ -471,7 +471,7 @@ or if already running:
 ### Get Processing Status
 
 ```http
-GET /api/processing/status
+GET /api/v1/processing/status
 Authorization: Bearer {AUTH_TOKEN}
 ```
 
@@ -492,7 +492,7 @@ Authorization: Bearer {AUTH_TOKEN}
 ### Get Processing Queue
 
 ```http
-GET /api/processing/queue
+GET /api/v1/processing/queue
 Authorization: Bearer {AUTH_TOKEN}
 ```
 
@@ -659,7 +659,7 @@ docker run --rm \
 
 **Monitoring:**
 - Health endpoint: `GET /health`
-- Processing status: `GET /api/processing/status`
+- Processing status: `GET /api/v1/processing/status`
 - Docker logs: `docker compose logs -f primeagent`
 
 **Security:**
@@ -956,15 +956,15 @@ grep -A5 "^git:" config.default.yaml
 
 ```bash
 # Check processing status
-curl http://localhost:8000/api/processing/status \
+curl http://localhost:8000/api/v1/processing/status \
   -H "Authorization: Bearer $AUTH_TOKEN"
 
 # Check queue
-curl http://localhost:8000/api/processing/queue \
+curl http://localhost:8000/api/v1/processing/queue \
   -H "Authorization: Bearer $AUTH_TOKEN"
 
 # Manually trigger
-curl -X POST http://localhost:8000/api/processing/trigger \
+curl -X POST http://localhost:8000/api/v1/processing/trigger \
   -H "Authorization: Bearer $AUTH_TOKEN"
 
 # Check logs

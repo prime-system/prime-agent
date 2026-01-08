@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends
 from app.dependencies import verify_token
 from app.services.background_tasks import get_task_tracker
 
-router = APIRouter(prefix="/api/monitoring", tags=["monitoring"])
+router = APIRouter(prefix="/api/v1/monitoring", tags=["monitoring"])
 
 
 @router.get("/background-tasks/status")

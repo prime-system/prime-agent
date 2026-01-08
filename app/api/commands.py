@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/commands", dependencies=[Depends(verify_token)])
+router = APIRouter(prefix="/api/v1/commands", dependencies=[Depends(verify_token)])
 
 
 def get_command_service() -> CommandService:

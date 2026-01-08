@@ -11,7 +11,7 @@ from app.services.claude_session_api import ClaudeSessionAPI
 from app.utils.path_validation import PathValidationError, validate_session_id
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/claude-sessions", tags=["claude-sessions"])
+router = APIRouter(prefix="/api/v1/claude-sessions", tags=["claude-sessions"])
 
 
 class SessionListResponse(BaseModel):

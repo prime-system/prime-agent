@@ -13,7 +13,7 @@ from app.services.vault import VaultService
 from app.utils.error_handling import format_exception_for_response
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(prefix="/api/v1")
 
 
 @router.post("/capture", response_model=CaptureResponse)
@@ -36,7 +36,7 @@ async def capture(
     5. Return response immediately
     6. Commit and push to git in background (errors ignored)
 
-    Note: Processing is triggered manually via the /api/processing/trigger endpoint.
+    Note: Processing is triggered manually via the /api/v1/processing/trigger endpoint.
     This ensures the capture endpoint returns instantly without any processing overhead.
     """
     dump_id = inbox_service.generate_dump_id(request.captured_at, request.source.value)

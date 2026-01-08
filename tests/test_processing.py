@@ -5,13 +5,13 @@ import pytest
 
 def test_trigger_processing_requires_auth(client):
     """Trigger endpoint requires authentication."""
-    response = client.post("/api/processing/trigger")
+    response = client.post("/api/v1/processing/trigger")
     assert response.status_code == 401
 
 
 def test_trigger_processing_success(client, auth_headers):
     """Trigger endpoint starts processing."""
-    response = client.post("/api/processing/trigger", headers=auth_headers)
+    response = client.post("/api/v1/processing/trigger", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert data["status"] in ["started", "already_running"]
@@ -20,13 +20,13 @@ def test_trigger_processing_success(client, auth_headers):
 
 def test_get_status_requires_auth(client):
     """Status endpoint requires authentication."""
-    response = client.get("/api/processing/status")
+    response = client.get("/api/v1/processing/status")
     assert response.status_code == 401
 
 
 def test_get_status_success(client, auth_headers):
     """Status endpoint returns processing state."""
-    response = client.get("/api/processing/status", headers=auth_headers)
+    response = client.get("/api/v1/processing/status", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert "is_running" in data
@@ -42,13 +42,13 @@ def test_get_status_success(client, auth_headers):
 
 def test_get_queue_requires_auth(client):
     """Queue endpoint requires authentication."""
-    response = client.get("/api/processing/queue")
+    response = client.get("/api/v1/processing/queue")
     assert response.status_code == 401
 
 
 def test_get_queue_success(client, auth_headers):
     """Queue endpoint returns unprocessed dumps."""
-    response = client.get("/api/processing/queue", headers=auth_headers)
+    response = client.get("/api/v1/processing/queue", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert "count" in data
@@ -62,14 +62,14 @@ def test_get_queue_with_unprocessed_dump(client, auth_headers, sample_capture_re
     """Queue endpoint lists captured dumps."""
     # First, create a capture
     capture_response = client.post(
-        "/capture",
+        "/api/v1/capture",
         json=sample_capture_request,
         headers=auth_headers,
     )
     assert capture_response.status_code == 200
 
     # Then check the queue
-    queue_response = client.get("/api/processing/queue", headers=auth_headers)
+    queue_response = client.get("/api/v1/processing/queue", headers=auth_headers)
     assert queue_response.status_code == 200
     data = queue_response.json()
 
@@ -90,13 +90,13 @@ def test_get_queue_with_unprocessed_dump(client, auth_headers, sample_capture_re
 def test_trigger_while_already_running(client, auth_headers):
     """Triggering while processing returns already_running status."""
     # First trigger
-    response1 = client.post("/api/processing/trigger", headers=auth_headers)
+    response1 = client.post("/api/v1/processing/trigger", headers=auth_headers)
     assert response1.status_code == 200
     data1 = response1.json()
 
     # If it started processing, a second immediate trigger should return already_running
     # (This test may be timing-dependent - processing might finish very quickly)
-    response2 = client.post("/api/processing/trigger", headers=auth_headers)
+    response2 = client.post("/api/v1/processing/trigger", headers=auth_headers)
     assert response2.status_code == 200
     data2 = response2.json()
 

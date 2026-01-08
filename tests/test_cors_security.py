@@ -27,7 +27,7 @@ def cors_app():
     async def test_endpoint() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.post("/capture")
+    @app.post("/api/v1/capture")
     async def capture_endpoint() -> dict[str, bool]:
         return {"ok": True}
 
@@ -46,7 +46,7 @@ class TestCORSPreflight:
     def test_cors_blocks_unknown_origins(self, cors_client):
         """Verify CORS blocks requests from unknown origins."""
         response = cors_client.options(
-            "/capture",
+            "/api/v1/capture",
             headers={"Origin": "https://attacker.com"},
         )
         # CORS should not include the attacker origin in the response
@@ -55,7 +55,7 @@ class TestCORSPreflight:
     def test_cors_allows_trusted_origins(self, cors_client):
         """Verify CORS allows requests from trusted origins."""
         response = cors_client.options(
-            "/capture",
+            "/api/v1/capture",
             headers={
                 "Origin": "http://localhost:3000",
                 "Access-Control-Request-Method": "POST",
@@ -68,7 +68,7 @@ class TestCORSPreflight:
         """Verify CORS works with multiple allowed origins."""
         for origin in ["http://localhost:3000", "http://localhost:8000"]:
             response = cors_client.options(
-                "/capture",
+                "/api/v1/capture",
                 headers={
                     "Origin": origin,
                     "Access-Control-Request-Method": "POST",
@@ -79,7 +79,7 @@ class TestCORSPreflight:
     def test_cors_restricts_http_methods(self, cors_client):
         """Verify CORS restricts HTTP methods to configured list."""
         response = cors_client.options(
-            "/capture",
+            "/api/v1/capture",
             headers={
                 "Origin": "http://localhost:3000",
                 "Access-Control-Request-Method": "DELETE",
@@ -92,7 +92,7 @@ class TestCORSPreflight:
     def test_cors_allows_configured_methods(self, cors_client):
         """Verify CORS allows configured HTTP methods."""
         response = cors_client.options(
-            "/capture",
+            "/api/v1/capture",
             headers={
                 "Origin": "http://localhost:3000",
                 "Access-Control-Request-Method": "POST",
@@ -104,7 +104,7 @@ class TestCORSPreflight:
     def test_cors_restricts_headers(self, cors_client):
         """Verify CORS restricts headers to configured list."""
         response = cors_client.options(
-            "/capture",
+            "/api/v1/capture",
             headers={
                 "Origin": "http://localhost:3000",
                 "Access-Control-Request-Headers": "X-Custom-Header",
@@ -117,7 +117,7 @@ class TestCORSPreflight:
     def test_cors_allows_configured_headers(self, cors_client):
         """Verify CORS allows configured headers."""
         response = cors_client.options(
-            "/capture",
+            "/api/v1/capture",
             headers={
                 "Origin": "http://localhost:3000",
                 "Access-Control-Request-Method": "POST",
@@ -130,7 +130,7 @@ class TestCORSPreflight:
     def test_cors_includes_credentials_flag(self, cors_client):
         """Verify CORS includes credentials flag when configured."""
         response = cors_client.options(
-            "/capture",
+            "/api/v1/capture",
             headers={
                 "Origin": "http://localhost:3000",
                 "Access-Control-Request-Method": "POST",
@@ -141,7 +141,7 @@ class TestCORSPreflight:
     def test_cors_includes_max_age(self, cors_client):
         """Verify CORS preflight cache is set."""
         response = cors_client.options(
-            "/capture",
+            "/api/v1/capture",
             headers={
                 "Origin": "http://localhost:3000",
                 "Access-Control-Request-Method": "POST",
@@ -167,7 +167,7 @@ class TestCORSActualRequests:
     def test_cors_post_request_allowed_origin(self, cors_client):
         """Verify POST request from allowed origin includes CORS headers."""
         response = cors_client.post(
-            "/capture",
+            "/api/v1/capture",
             headers={"Origin": "http://localhost:3000"},
         )
         assert response.status_code == 200
@@ -204,7 +204,7 @@ class TestCORSSecurityConfiguration:
         """Verify CORS origin matching is case-sensitive where applicable."""
         # Test that mixed case domain still works (DNS is case-insensitive)
         response = cors_client.options(
-            "/capture",
+            "/api/v1/capture",
             headers={
                 "Origin": "http://LOCALHOST:3000",
                 "Access-Control-Request-Method": "POST",

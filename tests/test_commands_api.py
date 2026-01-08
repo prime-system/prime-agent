@@ -66,7 +66,7 @@ def client_with_commands(test_app_with_commands: FastAPI) -> TestClient:
 
 def test_list_commands_requires_auth(client_with_commands: TestClient) -> None:
     """Test that listing commands requires authentication."""
-    response = client_with_commands.get("/api/commands")
+    response = client_with_commands.get("/api/v1/commands")
 
     assert response.status_code == 401
     assert "Not authenticated" in response.json()["detail"]
@@ -75,7 +75,7 @@ def test_list_commands_requires_auth(client_with_commands: TestClient) -> None:
 def test_list_commands_empty(client_with_commands: TestClient, temp_vault: Path) -> None:
     """Test listing commands when none exist."""
     response = client_with_commands.get(
-        "/api/commands", headers={"Authorization": "Bearer test-token-123"}
+        "/api/v1/commands", headers={"Authorization": "Bearer test-token-123"}
     )
 
     assert response.status_code == 200
@@ -110,7 +110,7 @@ Second command content
     )
 
     response = client_with_commands.get(
-        "/api/commands", headers={"Authorization": "Bearer test-token-123"}
+        "/api/v1/commands", headers={"Authorization": "Bearer test-token-123"}
     )
 
     assert response.status_code == 200
@@ -144,7 +144,7 @@ def test_list_commands_with_namespaces(client_with_commands: TestClient, temp_va
     (backend_dir / "api.md").write_text("# Backend API")
 
     response = client_with_commands.get(
-        "/api/commands", headers={"Authorization": "Bearer test-token-123"}
+        "/api/v1/commands", headers={"Authorization": "Bearer test-token-123"}
     )
 
     assert response.status_code == 200
@@ -163,7 +163,7 @@ def test_get_command_detail_requires_auth(
     client_with_commands: TestClient,
 ) -> None:
     """Test that getting command detail requires authentication."""
-    response = client_with_commands.get("/api/commands/test-cmd")
+    response = client_with_commands.get("/api/v1/commands/test-cmd")
 
     assert response.status_code == 401
     assert "Not authenticated" in response.json()["detail"]
@@ -172,7 +172,7 @@ def test_get_command_detail_requires_auth(
 def test_get_command_detail_not_found(client_with_commands: TestClient, temp_vault: Path) -> None:
     """Test getting command that doesn't exist."""
     response = client_with_commands.get(
-        "/api/commands/nonexistent", headers={"Authorization": "Bearer test-token-123"}
+        "/api/v1/commands/nonexistent", headers={"Authorization": "Bearer test-token-123"}
     )
 
     assert response.status_code == 404
@@ -207,7 +207,7 @@ def test_get_command_detail_success(client_with_commands: TestClient, temp_vault
     )
 
     response = client_with_commands.get(
-        "/api/commands/review", headers={"Authorization": "Bearer test-token-123"}
+        "/api/v1/commands/review", headers={"Authorization": "Bearer test-token-123"}
     )
 
     assert response.status_code == 200
@@ -253,7 +253,7 @@ def test_get_command_detail_minimal(client_with_commands: TestClient, temp_vault
     command_file.write_text("# Simple Command\n\nJust a simple command.")
 
     response = client_with_commands.get(
-        "/api/commands/simple", headers={"Authorization": "Bearer test-token-123"}
+        "/api/v1/commands/simple", headers={"Authorization": "Bearer test-token-123"}
     )
 
     assert response.status_code == 200
@@ -283,7 +283,7 @@ All remaining args: $ARGUMENTS
     )
 
     response = client_with_commands.get(
-        "/api/commands/deploy", headers={"Authorization": "Bearer test-token-123"}
+        "/api/v1/commands/deploy", headers={"Authorization": "Bearer test-token-123"}
     )
 
     assert response.status_code == 200
@@ -306,7 +306,7 @@ def test_response_format_validation(client_with_commands: TestClient, temp_vault
 
     # Test list response
     list_response = client_with_commands.get(
-        "/api/commands", headers={"Authorization": "Bearer test-token-123"}
+        "/api/v1/commands", headers={"Authorization": "Bearer test-token-123"}
     )
     list_data = list_response.json()
 
@@ -329,7 +329,7 @@ def test_response_format_validation(client_with_commands: TestClient, temp_vault
 
     # Test detail response
     detail_response = client_with_commands.get(
-        "/api/commands/test", headers={"Authorization": "Bearer test-token-123"}
+        "/api/v1/commands/test", headers={"Authorization": "Bearer test-token-123"}
     )
     detail_data = detail_response.json()
 
@@ -367,7 +367,7 @@ Content
     )
 
     response = client_with_commands.get(
-        "/api/commands", headers={"Authorization": "Bearer test-token-123"}
+        "/api/v1/commands", headers={"Authorization": "Bearer test-token-123"}
     )
 
     # Should succeed and return only valid command

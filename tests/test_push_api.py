@@ -249,7 +249,7 @@ class TestRegisterEndpoint:
 
 
 class TestSendNotificationEndpoint:
-    """Test POST /api/notifications/send endpoint."""
+    """Test POST /api/v1/notifications/send endpoint."""
 
     def test_send_to_single_device(
         self,

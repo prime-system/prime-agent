@@ -2,9 +2,9 @@
 Processing API endpoints.
 
 Provides manual control over dump processing:
-- POST /trigger - Start processing manually
-- GET /status - Check if processing is running and view last run
-- GET /queue - List unprocessed dumps
+- POST /api/v1/processing/trigger - Start processing manually
+- GET /api/v1/processing/status - Check if processing is running and view last run
+- GET /api/v1/processing/queue - List unprocessed dumps
 """
 
 import logging
@@ -19,7 +19,7 @@ from app.services.vault import VaultService
 from app.services.worker import AgentWorker
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/processing", tags=["processing"])
+router = APIRouter(prefix="/api/v1/processing", tags=["processing"])
 
 
 @router.post("/trigger")

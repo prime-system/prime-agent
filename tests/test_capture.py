@@ -7,14 +7,14 @@ def test_health_check(client):
 
 def test_capture_requires_auth(client, sample_capture_request):
     """Capture endpoint requires authentication."""
-    response = client.post("/capture", json=sample_capture_request)
+    response = client.post("/api/v1/capture", json=sample_capture_request)
     assert response.status_code == 401  # HTTPBearer returns 401 when no credentials provided
 
 
 def test_capture_rejects_invalid_token(client, sample_capture_request):
     """Capture endpoint rejects invalid token."""
     response = client.post(
-        "/capture",
+        "/api/v1/capture",
         json=sample_capture_request,
         headers={"Authorization": "Bearer invalid"},
     )
@@ -24,7 +24,7 @@ def test_capture_rejects_invalid_token(client, sample_capture_request):
 def test_capture_validates_request(client, auth_headers):
     """Capture endpoint validates request body."""
     response = client.post(
-        "/capture",
+        "/api/v1/capture",
         json={"text": ""},
         headers=auth_headers,
     )
@@ -34,7 +34,7 @@ def test_capture_validates_request(client, auth_headers):
 def test_capture_validates_empty_text(client, auth_headers):
     """Capture endpoint rejects empty text."""
     response = client.post(
-        "/capture",
+        "/api/v1/capture",
         json={
             "text": "",
             "source": "iphone",
@@ -50,7 +50,7 @@ def test_capture_validates_empty_text(client, auth_headers):
 def test_capture_validates_invalid_source(client, auth_headers):
     """Capture endpoint rejects invalid source."""
     response = client.post(
-        "/capture",
+        "/api/v1/capture",
         json={
             "text": "Test thought",
             "source": "invalid",
@@ -66,7 +66,7 @@ def test_capture_validates_invalid_source(client, auth_headers):
 def test_capture_success(client, auth_headers, sample_capture_request):
     """Capture endpoint accepts valid request (per-capture file mode with subfolders)."""
     response = client.post(
-        "/capture",
+        "/api/v1/capture",
         json=sample_capture_request,
         headers=auth_headers,
     )
@@ -84,7 +84,7 @@ def test_capture_success(client, auth_headers, sample_capture_request):
 def test_capture_with_location(client, auth_headers):
     """Capture endpoint accepts request with location."""
     response = client.post(
-        "/capture",
+        "/api/v1/capture",
         json={
             "text": "Test thought with location",
             "source": "iphone",
@@ -107,7 +107,7 @@ def test_capture_different_sources(client, auth_headers):
     """Capture endpoint accepts all valid sources."""
     for source in ["iphone", "ipad", "mac"]:
         response = client.post(
-            "/capture",
+            "/api/v1/capture",
             json={
                 "text": f"Test from {source}",
                 "source": source,
@@ -124,7 +124,7 @@ def test_capture_different_input_types(client, auth_headers):
     """Capture endpoint accepts all valid input types."""
     for input_type in ["voice", "text"]:
         response = client.post(
-            "/capture",
+            "/api/v1/capture",
             json={
                 "text": f"Test {input_type} input",
                 "source": "mac",
@@ -141,7 +141,7 @@ def test_capture_different_app_contexts(client, auth_headers):
     """Capture endpoint accepts all valid app contexts."""
     for app in ["prime", "shortcuts", "cli", "web"]:
         response = client.post(
-            "/capture",
+            "/api/v1/capture",
             json={
                 "text": f"Test from {app}",
                 "source": "mac",

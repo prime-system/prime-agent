@@ -58,9 +58,9 @@ def test_filter_allows_health_check_errors(health_filter: HealthCheckFilter) -> 
 def test_filter_allows_non_health_endpoints(health_filter: HealthCheckFilter) -> None:
     """Test that other endpoints are not filtered."""
     other_logs = [
-        '127.0.0.1:56789 - "POST /capture HTTP/1.1" 200 OK',
-        '127.0.0.1:56789 - "GET /api/processing/status HTTP/1.1" 200 OK',
-        '127.0.0.1:56789 - "POST /api/processing/trigger HTTP/1.1" 500 Internal Server Error',
+        '127.0.0.1:56789 - "POST /api/v1/capture HTTP/1.1" 200 OK',
+        '127.0.0.1:56789 - "GET /api/v1/processing/status HTTP/1.1" 200 OK',
+        '127.0.0.1:56789 - "POST /api/v1/processing/trigger HTTP/1.1" 500 Internal Server Error',
     ]
 
     for log_message in other_logs:

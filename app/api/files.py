@@ -14,7 +14,7 @@ from app.services.vault import VaultService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/files", dependencies=[Depends(verify_token)])
+router = APIRouter(prefix="/api/v1/files", dependencies=[Depends(verify_token)])
 
 
 class FileContentResponse(BaseModel):

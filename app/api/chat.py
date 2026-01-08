@@ -19,7 +19,7 @@ from app.models.chat import (
 from app.services.chat_session_manager import ChatSessionManager
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/chat", tags=["chat"])
+router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 
 
 class ConnectionManager:
