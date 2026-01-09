@@ -39,6 +39,7 @@ RUN uv sync --frozen --no-dev
 
 # Copy application code and configuration template
 COPY --chown=${APP_USER}:${APP_USER} app/ app/
+COPY --chown=${APP_USER}:${APP_USER} app/skills/ /app/skills/
 COPY --chown=${APP_USER}:${APP_USER} scripts/app/ /app/scripts/
 COPY --chown=${APP_USER}:${APP_USER} config.default.yaml /app/config.default.yaml
 COPY --chown=root:root scripts/app/entrypoint.sh /entrypoint.sh

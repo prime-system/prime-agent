@@ -12,6 +12,7 @@ This sets shell variables that can be used in the entrypoint script.
 """
 
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -66,6 +67,28 @@ def shell_escape(value: str) -> str:
     return value
 
 
+def expand_env_vars(config_str: str) -> str:
+    """Expand ${VAR_NAME} placeholders using environment variables."""
+
+    def replace_var(match: re.Match[str]) -> str:
+        var_name = match.group(1)
+        try:
+            return os.environ[var_name]
+        except KeyError:
+            msg = f"Environment variable '{var_name}' referenced in config.yaml but not set"
+            raise KeyError(msg) from None
+
+    lines: list[str] = []
+    for line in config_str.split("\n"):
+        stripped = line.lstrip()
+        if stripped.startswith("#"):
+            lines.append(line)
+        else:
+            lines.append(re.sub(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", replace_var, line))
+
+    return "\n".join(lines)
+
+
 def parse_config(config_path: str) -> dict[str, str]:
     """
     Parse configuration file and return shell variable exports.
@@ -81,8 +104,9 @@ def parse_config(config_path: str) -> dict[str, str]:
 
     if config_file.exists():
         try:
-            with open(config_file, 'r') as f:
-                config = yaml.safe_load(f) or {}
+            config_str = config_file.read_text()
+            expanded_config = expand_env_vars(config_str)
+            config = yaml.safe_load(expanded_config) or {}
         except Exception as e:
             exports['CONFIG_PARSE_ERROR'] = f"Failed to parse {config_path}: {e}"
             return exports
@@ -113,6 +137,16 @@ def parse_config(config_path: str) -> dict[str, str]:
     # Logging configuration
     log_level = get_nested_value(config, 'logging', 'level', default='INFO')
     exports['LOG_LEVEL'] = os.environ.get('LOG_LEVEL', log_level)
+
+    # Base URL configuration
+    base_url = get_nested_value(config, 'base_url', default='')
+    exports['BASE_URL'] = os.environ.get('BASE_URL', base_url)
+
+    # Auth configuration
+    auth_token_env = os.environ.get('AUTH_TOKEN')
+    auth_token = auth_token_env or get_nested_value(config, 'auth', 'token', default='')
+    if auth_token:
+        exports['AUTH_TOKEN'] = auth_token
 
     # Storage configuration
     data_path = get_nested_value(config, 'storage', 'data_path', default='/data')

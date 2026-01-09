@@ -29,6 +29,41 @@ else
     GIT_ENABLED="${GIT_ENABLED:-false}"
 fi
 
+# ============================================
+# Notify Skill Setup
+# ============================================
+
+if [ -z "$PRIME_API_URL" ]; then
+    if [ -n "$BASE_URL" ]; then
+        PRIME_API_URL="${BASE_URL%/}"
+    else
+        PRIME_API_URL="http://localhost:8000"
+    fi
+    export PRIME_API_URL
+fi
+
+if [ -z "$PRIME_API_TOKEN" ] && [ -n "$AUTH_TOKEN" ]; then
+    export PRIME_API_TOKEN="$AUTH_TOKEN"
+fi
+
+SKILLS_SRC="/app/skills"
+CLAUDE_SKILLS_DIR="/home/prime/.claude/skills"
+
+if [ -d "$SKILLS_SRC/notify-skill" ]; then
+    mkdir -p "$CLAUDE_SKILLS_DIR"
+    if [ ! -f "$CLAUDE_SKILLS_DIR/notify-skill/SKILL.md" ]; then
+        echo "Installing notify skill..."
+        cp -R "$SKILLS_SRC/notify-skill" "$CLAUDE_SKILLS_DIR/"
+    fi
+
+    chown -R prime:prime "$CLAUDE_SKILLS_DIR/notify-skill"
+    chmod -R u+rwX,go+rX,go-w "$CLAUDE_SKILLS_DIR/notify-skill"
+
+    if [ -f "$CLAUDE_SKILLS_DIR/notify-skill/notify.py" ]; then
+        chmod +x "$CLAUDE_SKILLS_DIR/notify-skill/notify.py"
+    fi
+fi
+
 # Only initialize Git if enabled
 if [ "$GIT_ENABLED" = "true" ] || [ "$GIT_ENABLED" = "True" ]; then
     if [ -z "$VAULT_REPO_URL" ]; then

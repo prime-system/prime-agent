@@ -7,7 +7,7 @@
 #   .dev-volumes/data/   - APNs device tokens and other data
 
 services:
-  primeai:
+  prime-agent:
     build:
       context: .
       dockerfile: Dockerfile
@@ -35,7 +35,7 @@ services:
           "CMD",
           "bash",
           "-c",
-          "cd /app && uv run python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\"",
+          'cd /app && uv run python -c "import urllib.request; urllib.request.urlopen(''http://localhost:8000/health'')"',
         ]
       interval: 30s
       timeout: 10s

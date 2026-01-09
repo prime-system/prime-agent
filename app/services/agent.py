@@ -45,6 +45,8 @@ class AgentService:
         vault_path: str,
         api_key: str,
         base_url: str | None = None,
+        prime_api_url: str | None = None,
+        prime_api_token: str | None = None,
         max_budget_usd: float = 2.0,
         timeout_seconds: int = 300,
     ):
@@ -55,12 +57,16 @@ class AgentService:
             vault_path: Absolute path to vault directory
             api_key: Anthropic API key
             base_url: Optional custom API endpoint
+            prime_api_url: Prime API base URL for notify skill
+            prime_api_token: Prime API auth token for notify skill
             max_budget_usd: Maximum cost per processing run (safety limit)
             timeout_seconds: Timeout for agent processing in seconds
         """
         self.vault_path = Path(vault_path)
         self.api_key = api_key
         self.base_url = base_url
+        self.prime_api_url = prime_api_url
+        self.prime_api_token = prime_api_token
         self.max_budget_usd = max_budget_usd
         self.timeout_seconds = timeout_seconds
 
@@ -152,6 +158,10 @@ class AgentService:
         env_dict = {"ANTHROPIC_API_KEY": self.api_key}
         if self.base_url:
             env_dict["ANTHROPIC_BASE_URL"] = self.base_url
+        if self.prime_api_url:
+            env_dict["PRIME_API_URL"] = self.prime_api_url.rstrip("/")
+        if self.prime_api_token:
+            env_dict["PRIME_API_TOKEN"] = self.prime_api_token
 
         options = ClaudeAgentOptions(
             allowed_tools=[

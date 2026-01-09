@@ -115,11 +115,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     inbox_service = InboxService()
 
+    prime_api_url = settings.base_url or "http://localhost:8000"
+
     # Initialize agent services
     agent_service = AgentService(
         vault_path=settings.vault_path,
         api_key=settings.anthropic_api_key,
         base_url=settings.anthropic_base_url,
+        prime_api_url=prime_api_url,
+        prime_api_token=settings.auth_token,
         max_budget_usd=settings.agent_max_budget_usd,
         timeout_seconds=settings.anthropic_timeout_seconds,
     )
@@ -140,6 +144,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         api_key=settings.anthropic_api_key,
         model=settings.agent_model,
         base_url=settings.anthropic_base_url,
+        prime_api_url=prime_api_url,
+        prime_api_token=settings.auth_token,
         git_service=git_service,
     )
 

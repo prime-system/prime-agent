@@ -45,6 +45,8 @@ class AgentChatService:
         api_key: str,
         model: str,
         base_url: str | None = None,
+        prime_api_url: str | None = None,
+        prime_api_token: str | None = None,
         git_service: GitService | None = None,
     ):
         """
@@ -55,11 +57,15 @@ class AgentChatService:
             api_key: Anthropic API key
             model: Agent model name (required)
             base_url: Optional custom API endpoint
+            prime_api_url: Prime API base URL for notify skill
+            prime_api_token: Prime API auth token for notify skill
             git_service: Optional GitService for automatic commit/push
         """
         self.vault_path = Path(vault_path)
         self.api_key = api_key
         self.base_url = base_url
+        self.prime_api_url = prime_api_url
+        self.prime_api_token = prime_api_token
         self.model = model
         self.git_service = git_service
 
@@ -84,6 +90,10 @@ class AgentChatService:
         env_dict = {"ANTHROPIC_API_KEY": self.api_key}
         if self.base_url:
             env_dict["ANTHROPIC_BASE_URL"] = self.base_url
+        if self.prime_api_url:
+            env_dict["PRIME_API_URL"] = self.prime_api_url.rstrip("/")
+        if self.prime_api_token:
+            env_dict["PRIME_API_TOKEN"] = self.prime_api_token
 
         options = ClaudeAgentOptions(
             allowed_tools=config.get(
