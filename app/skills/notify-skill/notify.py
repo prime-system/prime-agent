@@ -22,14 +22,12 @@ import argparse
 import json
 import os
 import sys
-from typing import Optional
+from typing import Any, Optional, cast
 
 import httpx
 
 
-
-
-def parse_args():
+def parse_args() -> argparse.Namespace:
     """Parse command-line arguments"""
     parser = argparse.ArgumentParser(
         description="Send push notifications to registered devices",
@@ -41,12 +39,12 @@ Examples:
   notify.py iphone --title "Update" --body "New feature"
   notify.py iphone,mac --title "Multi" --body "All Apple devices"
   notify.py --environment production --title "Alert" --body "Error" --priority high
-        """
+        """,
     )
     parser.add_argument(
         "device_filter",
         nargs="?",
-        help="Device name, type, or comma-separated list (optional, default: all devices)"
+        help="Device name, type, or comma-separated list (optional, default: all devices)",
     )
     parser.add_argument("--title", required=True, help="Notification title")
     parser.add_argument("--body", required=True, help="Notification body")
@@ -54,12 +52,10 @@ Examples:
         "--priority",
         choices=["high", "normal"],
         default="normal",
-        help="Notification priority (default: normal)"
+        help="Notification priority (default: normal)",
     )
     parser.add_argument(
-        "--environment",
-        choices=["development", "production"],
-        help="Filter by device environment"
+        "--environment", choices=["development", "production"], help="Filter by device environment"
     )
     parser.add_argument("--data", help="Custom data as JSON string")
     parser.add_argument("--badge", type=int, help="Badge count")
@@ -69,7 +65,7 @@ Examples:
     return parser.parse_args()
 
 
-def load_config() -> dict:
+def load_config() -> dict[str, str]:
     """Load configuration from environment variables
 
     Returns:
@@ -99,6 +95,10 @@ def load_config() -> dict:
         print("  export PRIME_API_TOKEN='your-api-token'", file=sys.stderr)
         sys.exit(3)
 
+    # Type narrowing: At this point, we know api_url and api_token are not None
+    assert api_url is not None
+    assert api_token is not None
+
     return {
         "api_url": api_url,
         "api_token": api_token,
@@ -115,9 +115,9 @@ def send_notification_via_api(
     priority: str = "normal",
     sound: str = "default",
     badge: Optional[int] = None,
-    data: Optional[dict] = None,
+    data: Optional[dict[str, Any]] = None,
     verbose: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     """Send notification via Prime API
 
     Args:
@@ -142,7 +142,7 @@ def send_notification_via_api(
     endpoint = f"{api_url}/api/v1/notifications/send"
 
     # Build request payload
-    payload = {
+    payload: dict[str, Any] = {
         "title": title,
         "body": body,
         "priority": priority,
@@ -197,8 +197,7 @@ def send_notification_via_api(
             sys.exit(2)
 
         # Parse successful response
-        result = response.json()
-        return result
+        return cast("dict[str, Any]", response.json())
 
     except httpx.TimeoutException:
         print(f"Error: Request timed out connecting to {api_url}", file=sys.stderr)
@@ -212,7 +211,7 @@ def send_notification_via_api(
         sys.exit(2)
 
 
-def main():
+def main() -> None:
     """Main function"""
     args = parse_args()
 
@@ -230,7 +229,7 @@ def main():
 
     # Send notification via API
     if not args.verbose and not args.json:
-        print(f"Sending notification...")
+        print("Sending notification...")
 
     result = send_notification_via_api(
         api_url=config["api_url"],
@@ -253,18 +252,17 @@ def main():
         if result["success"]:
             if not args.verbose:
                 print(f"✓ Sent to {result['sent']} device(s)")
-        else:
-            if not args.verbose:
-                if result["sent"] > 0:
-                    print(f"✓ Sent to {result['sent']} device(s)")
-                if result["failed"] > 0:
-                    print(f"✗ Failed to send to {result['failed']} device(s)")
+        elif not args.verbose:
+            if result["sent"] > 0:
+                print(f"✓ Sent to {result['sent']} device(s)")
+            if result["failed"] > 0:
+                print(f"✗ Failed to send to {result['failed']} device(s)")
 
         if result.get("invalid_tokens_removed", 0) > 0:
             print(f"⚠ Removed {result['invalid_tokens_removed']} invalid token(s)")
 
         if args.verbose:
-            print(f"\nDevice results:")
+            print("\nDevice results:")
             for device in result.get("devices", []):
                 status = device["status"]
                 name = device["name"]
@@ -296,5 +294,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Fatal error: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         sys.exit(3)
