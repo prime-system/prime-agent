@@ -11,6 +11,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
+from uuid import uuid4
 
 from claude_agent_sdk import ClaudeSDKClient
 
@@ -31,6 +32,8 @@ class AgentSessionState:
     last_activity: datetime = field(default_factory=lambda: datetime.now(UTC))
     connected_ws_id: str | None = None
     is_processing: bool = False
+    replay_in_progress: bool = False
+    ws_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
 class AgentSessionManager:
@@ -60,6 +63,13 @@ class AgentSessionManager:
         self._lock = asyncio.Lock()
         self._cleanup_task: asyncio.Task[None] | None = None
 
+    def _generate_pending_session_id(self) -> str:
+        """Generate a unique temporary session ID for new sessions."""
+        while True:
+            pending_id = f"pending_{uuid4().hex}"
+            if pending_id not in self.sessions:
+                return pending_id
+
     async def get_or_create_session(self, session_id: str | None) -> AgentSessionState:
         """
         Get existing session or create new one.
@@ -81,17 +91,17 @@ class AgentSessionManager:
             # Create new session
             logger.info("Creating new agent session (resume=%s)", session_id)
 
+            # Ensure new sessions have unique temporary IDs
+            temp_session_id = session_id or self._generate_pending_session_id()
+
             # Create long-lived ClaudeSDKClient
             client = self.agent_service.create_client_instance(session_id=session_id)
 
             # Create state
             input_queue: asyncio.Queue[str] = asyncio.Queue()
             processing_task = asyncio.create_task(
-                self._process_session_loop(session_id or "new", input_queue, client)
+                self._process_session_loop(temp_session_id, input_queue, client)
             )
-
-            # Will be updated with actual session_id once client is initialized
-            temp_session_id = session_id or "new"
             temp_state = AgentSessionState(
                 session_id=temp_session_id,
                 client=client,
@@ -123,38 +133,72 @@ class AgentSessionManager:
         """
         async with self._lock:
             state = self.sessions.get(session_id)
-            if not state:
-                logger.error("Cannot attach to non-existent session %s", session_id)
-                return []
+        if not state:
+            logger.error("Cannot attach to non-existent session %s", session_id)
+            return []
 
-            # Kick previous client if exists
+        previous_ws_id: str | None = None
+        async with state.ws_lock:
             if state.connected_ws_id and state.connected_ws_id != ws_id:
-                logger.info(
-                    "Kicking previous client %s (new client: %s)",
-                    state.connected_ws_id,
-                    ws_id,
-                )
-                await connection_manager.send_message(
-                    state.connected_ws_id,
-                    {"type": "session_taken"},
-                )
-                connection_manager.disconnect(state.connected_ws_id)
+                previous_ws_id = state.connected_ws_id
 
-            # Attach new client
+            # Attach new client and start replay mode
             state.connected_ws_id = ws_id
             state.last_activity = datetime.now(UTC)
+            state.replay_in_progress = True
 
             # Drain and return buffered messages
             buffered = list(state.message_buffer)
             state.message_buffer.clear()
 
+        # Kick previous client if exists
+        if previous_ws_id:
             logger.info(
-                "Attached WebSocket %s to session %s (buffered: %d)",
+                "Kicking previous client %s (new client: %s)",
+                previous_ws_id,
                 ws_id,
-                session_id,
-                len(buffered),
             )
-            return buffered
+            await connection_manager.send_message(
+                previous_ws_id,
+                {"type": "session_taken"},
+            )
+            await connection_manager.disconnect(previous_ws_id)
+
+        logger.info(
+            "Attached WebSocket %s to session %s (buffered: %d)",
+            ws_id,
+            session_id,
+            len(buffered),
+        )
+        return buffered
+
+    async def finish_replay(
+        self,
+        state: AgentSessionState,
+        ws_id: str,
+        connection_manager: Any,
+    ) -> None:
+        """
+        Finish replay after sending buffered messages.
+
+        Ensures events that arrive during replay are sent in order
+        before resuming live streaming.
+        """
+        while True:
+            async with state.ws_lock:
+                if state.connected_ws_id != ws_id:
+                    state.replay_in_progress = False
+                    return
+
+                if not state.message_buffer:
+                    state.replay_in_progress = False
+                    return
+
+                pending = list(state.message_buffer)
+                state.message_buffer.clear()
+
+            for event in pending:
+                await connection_manager.send_message(ws_id, event)
 
     async def detach_websocket(self, session_id: str, ws_id: str) -> None:
         """
@@ -168,15 +212,23 @@ class AgentSessionManager:
         """
         async with self._lock:
             state = self.sessions.get(session_id)
-            if not state:
-                return
+        if not state:
+            return
 
+        async with state.ws_lock:
             # Only detach if this is the currently attached client
             if state.connected_ws_id == ws_id:
                 state.connected_ws_id = None
+                state.replay_in_progress = False
                 logger.info("Detached WebSocket %s from session %s", ws_id, session_id)
 
-    async def send_user_message(self, session_id: str, message: str) -> None:
+    async def send_user_message(
+        self,
+        session_id: str,
+        message: str,
+        ws_id: str | None = None,
+        connection_manager: Any | None = None,
+    ) -> bool:
         """
         Queue user message for processing.
 
@@ -187,11 +239,30 @@ class AgentSessionManager:
         state = self.sessions.get(session_id)
         if not state:
             logger.error("Cannot send message to non-existent session %s", session_id)
-            return
+            return False
+
+        if ws_id is not None:
+            async with state.ws_lock:
+                active_ws_id = state.connected_ws_id
+
+            if active_ws_id != ws_id:
+                logger.warning(
+                    "Rejected message from non-active WebSocket %s (active=%s)",
+                    ws_id,
+                    active_ws_id,
+                )
+                if connection_manager:
+                    await connection_manager.send_message(
+                        ws_id,
+                        {"type": "session_taken"},
+                    )
+                    await connection_manager.disconnect(ws_id)
+                return False
 
         await state.input_queue.put(message)
         state.last_activity = datetime.now(UTC)
         logger.debug("Queued message for session %s", session_id)
+        return True
 
     async def terminate_session(self, session_id: str) -> None:
         """
@@ -201,25 +272,22 @@ class AgentSessionManager:
             session_id: Agent session ID to terminate
         """
         async with self._lock:
-            state = self.sessions.pop(session_id, None)
-            if not state:
-                return
+            state = self.sessions.get(session_id)
+        if not state:
+            return
 
-            # Cancel processing task
-            if not state.processing_task.done():
-                state.processing_task.cancel()
-                try:
-                    await state.processing_task
-                except asyncio.CancelledError:
-                    pass
-
-            # Close SDK client
+        if not state.processing_task.done():
+            state.processing_task.cancel()
             try:
-                await state.client.__aexit__(None, None, None)
-            except Exception as e:
-                logger.warning("Error closing SDK client for %s: %s", session_id, e)
+                await state.processing_task
+            except asyncio.CancelledError:
+                pass
 
-            logger.info("Terminated session %s", session_id)
+        async with self._lock:
+            still_present = self.sessions.get(state.session_id) is state
+
+        if still_present:
+            await self._cleanup_state(state)
 
     def start_cleanup_loop(self) -> None:
         """Start background task to cleanup inactive sessions."""
@@ -263,6 +331,8 @@ class AgentSessionManager:
         """
         session_id = initial_session_id
         state: AgentSessionState | None = None
+        fatal_error: dict[str, Any] | None = None
+        cancel_exc: asyncio.CancelledError | None = None
 
         try:
             # Initialize SDK client
@@ -273,85 +343,184 @@ class AgentSessionManager:
             while True:
                 # Wait for user message
                 user_message = await input_queue.get()
+                terminate_after_message = False
 
-                # Update state reference
-                if state is None:
-                    state = self.sessions.get(session_id)
+                try:
+                    # Update state reference
+                    if state is None:
+                        state = self.sessions.get(session_id)
 
-                if state:
-                    state.is_processing = True
-
-                logger.info("Processing message for session %s", session_id)
-
-                # Process message and stream events
-                async for event in self.agent_service.process_message_stream(client, user_message):
-                    # Capture session ID from init event
-                    if event.get("type") == "session_id":
-                        new_session_id = event["session_id"]
-                        if new_session_id != session_id:
-                            logger.info("Session ID captured: %s", new_session_id)
-                            session_id = new_session_id
-
-                            # Move session state to new ID
-                            async with self._lock:
-                                if initial_session_id in self.sessions:
-                                    state = self.sessions.pop(initial_session_id)
-                                    state.session_id = session_id
-                                    self.sessions[session_id] = state
-
-                    # Update activity
                     if state:
-                        state.last_activity = datetime.now(UTC)
+                        state.is_processing = True
 
-                        # Send to WebSocket or buffer
-                        if state.connected_ws_id:
-                            # Import here to avoid circular dependency
-                            from app.api.chat import connection_manager
+                    logger.info("Processing message for session %s", session_id)
 
-                            success = await connection_manager.send_message(
-                                state.connected_ws_id, event
-                            )
-                            if not success:
-                                logger.warning("Failed to send to WS, buffering")
-                                state.message_buffer.append(event)
-                        else:
-                            # Buffer for later
-                            state.message_buffer.append(event)
+                    # Process message and stream events
+                    async for event in self.agent_service.process_message_stream(
+                        client, user_message
+                    ):
+                        # Capture session ID from init event
+                        if event.get("type") == "session_id":
+                            new_session_id = event.get("session_id") or event.get("sessionId")
+                            if new_session_id and new_session_id != session_id and state:
+                                logger.info("Session ID captured: %s", new_session_id)
+                                session_id = await self._rekey_session(state, new_session_id)
 
-                    # Check for completion and early termination
-                    if event.get("type") == "complete" and state and state.connected_ws_id is None:
-                        logger.info(
-                            "Response complete with no client, waiting %ds before termination",
-                            self.GRACE_PERIOD_SECONDS,
-                        )
-                        await asyncio.sleep(self.GRACE_PERIOD_SECONDS)
+                        # Update activity
+                        if state:
+                            state.last_activity = datetime.now(UTC)
 
-                        # Double-check still disconnected
-                        if state.connected_ws_id is None:
-                            logger.info("Terminating idle completed session %s", session_id)
-                            await self.terminate_session(session_id)
-                            return
+                            # Send to WebSocket or buffer
+                            await self._dispatch_event(state, event)
 
-                if state:
-                    state.is_processing = False
+                            # Check for completion and early termination
+                            if event.get("type") == "complete" and await self._should_terminate_after_complete(state):
+                                terminate_after_message = True
 
-                input_queue.task_done()
+                finally:
+                    if state:
+                        state.is_processing = False
+                    input_queue.task_done()
 
-        except asyncio.CancelledError:
+                if terminate_after_message:
+                    logger.info("Terminating idle completed session %s", session_id)
+                    break
+
+        except asyncio.CancelledError as exc:
             logger.info("Processing loop cancelled for session %s", session_id)
+            cancel_exc = exc
         except Exception as e:
             logger.exception("Error in processing loop for session %s", session_id)
-            # Send error to client if connected
-            if state and state.connected_ws_id:
-                from app.api.chat import connection_manager
+            fatal_error = {
+                "type": "error",
+                "error": str(e),
+                "isPermanent": True,
+            }
+        finally:
+            if state is None:
+                state = self.sessions.get(session_id)
 
-                await connection_manager.send_message(
-                    state.connected_ws_id,
-                    {
-                        "type": "error",
-                        "error": str(e),
-                    },
-                )
+            if cancel_exc:
+                await asyncio.shield(self._cleanup_state(state, error_event=fatal_error))
+            else:
+                await self._cleanup_state(state, error_event=fatal_error)
+
+            if cancel_exc:
+                raise cancel_exc
+
+    async def _dispatch_event(self, state: AgentSessionState, event: dict[str, Any]) -> None:
+        """Send event to active WebSocket or buffer it if unavailable."""
+        async with state.ws_lock:
+            connected_ws_id = state.connected_ws_id
+            replaying = state.replay_in_progress
+
+        if connected_ws_id and not replaying:
+            # Import here to avoid circular dependency
+            from app.api.chat import connection_manager
+
+            success = await connection_manager.send_message(connected_ws_id, event)
+            if not success:
+                logger.warning("Failed to send to WS, buffering")
+                await self._buffer_event(state, event)
+            return
+
+        await self._buffer_event(state, event)
+
+    async def _buffer_event(self, state: AgentSessionState, event: dict[str, Any]) -> None:
+        """Buffer event for later replay."""
+        async with state.ws_lock:
+            state.message_buffer.append(event)
+
+    async def _should_terminate_after_complete(self, state: AgentSessionState) -> bool:
+        """Check if session should terminate after completion with no client."""
+        async with state.ws_lock:
+            connected = state.connected_ws_id is not None
+
+        if connected:
+            return False
+
+        logger.info(
+            "Response complete with no client, waiting %ds before termination",
+            self.GRACE_PERIOD_SECONDS,
+        )
+        await asyncio.sleep(self.GRACE_PERIOD_SECONDS)
+
+        async with state.ws_lock:
+            return state.connected_ws_id is None
+
+    async def _cleanup_state(
+        self,
+        state: AgentSessionState | None,
+        *,
+        error_event: dict[str, Any] | None = None,
+    ) -> None:
+        """Cleanup session resources after processing loop exits."""
+        if not state:
+            return
+
+        async with self._lock:
+            current_state = self.sessions.get(state.session_id)
+            if current_state is state:
+                self.sessions.pop(state.session_id, None)
+
+        async with state.ws_lock:
+            ws_id = state.connected_ws_id
+            state.connected_ws_id = None
+            state.replay_in_progress = False
+
+        if ws_id:
+            from app.api.chat import connection_manager
+
+            if error_event:
+                await connection_manager.send_message(ws_id, error_event)
+            await connection_manager.disconnect(ws_id)
+
+        # Close SDK client
+        try:
+            await state.client.__aexit__(None, None, None)
+        except Exception as e:
+            logger.warning("Error closing SDK client for %s: %s", state.session_id, e)
+
+        logger.info("Terminated session %s", state.session_id)
+
+    async def _rekey_session(self, state: AgentSessionState, new_session_id: str) -> str:
+        """Move session state to new session ID."""
+        old_session_id = state.session_id
+        if new_session_id == old_session_id:
+            return old_session_id
+
+        collision_state: AgentSessionState | None = None
+        async with self._lock:
+            current_state = self.sessions.get(old_session_id)
+            if current_state is state:
+                self.sessions.pop(old_session_id, None)
+
+            existing_state = self.sessions.get(new_session_id)
+            if existing_state and existing_state is not state:
+                collision_state = self.sessions.pop(new_session_id, None)
+
+            state.session_id = new_session_id
+            self.sessions[new_session_id] = state
+
+        if collision_state:
+            logger.warning(
+                "Session ID collision detected for %s; terminating prior session",
+                new_session_id,
+            )
+            await self._terminate_state(collision_state)
+
+        return new_session_id
+
+    async def _terminate_state(self, state: AgentSessionState) -> None:
+        """Terminate a session state instance regardless of registry status."""
+        if not state.processing_task.done():
+            state.processing_task.cancel()
+            try:
+                await state.processing_task
+            except asyncio.CancelledError:
+                pass
+
+        await self._cleanup_state(state)
 
     async def _cleanup_once(self) -> None:
         """Run a single cleanup pass for inactive sessions."""

@@ -17,6 +17,7 @@ from app.models.chat import (
     WSMessageType,
 )
 from app.services.chat_session_manager import ChatSessionManager
+from app.utils.path_validation import PathValidationError, validate_session_id
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
@@ -58,14 +59,30 @@ class ConnectionManager:
             logger.info("WebSocket connected (connection=%s)", connection_id)
             return True
 
-    def disconnect(self, connection_id: str) -> None:
+    async def disconnect(
+        self,
+        connection_id: str,
+        *,
+        code: int = 1000,
+        reason: str | None = None,
+    ) -> None:
         """
         Clean up connection.
 
         Args:
             connection_id: Connection identifier
         """
-        self.active_connections.pop(connection_id, None)
+        async with self._lock:
+            websocket = self.active_connections.pop(connection_id, None)
+
+        if not websocket:
+            return
+
+        try:
+            await websocket.close(code=code, reason=reason or "")
+        except Exception as e:
+            logger.debug("Error closing WebSocket %s: %s", connection_id, e)
+
         logger.info("WebSocket disconnected (connection=%s)", connection_id)
 
     async def send_message(self, connection_id: str, message: dict[str, Any]) -> bool:
@@ -79,7 +96,8 @@ class ConnectionManager:
         Returns:
             True if sent successfully, False if connection doesn't exist
         """
-        websocket = self.active_connections.get(connection_id)
+        async with self._lock:
+            websocket = self.active_connections.get(connection_id)
         if not websocket:
             return False
 
@@ -88,7 +106,7 @@ class ConnectionManager:
             return True
         except Exception as e:
             logger.error("Error sending to connection %s: %s", connection_id, e)
-            self.disconnect(connection_id)
+            await self.disconnect(connection_id)
             return False
 
 
@@ -146,16 +164,25 @@ async def get_session_messages(
     Raises:
         HTTPException: If session not found (404)
     """
+    # Validate session_id format to prevent path traversal
+    try:
+        validated_id = validate_session_id(session_id)
+    except PathValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid session ID: {e}",
+        )
+
     # Validate session exists
-    if not session_manager.session_exists(session_id):
+    if not session_manager.session_exists(validated_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found",
+            detail=f"Session {validated_id} not found",
         )
 
     # Load messages from Claude Code session
     messages = session_manager.get_session_messages(
-        session_id,
+        validated_id,
         roles=["user", "assistant"],
     )
 
@@ -173,10 +200,10 @@ async def get_session_messages(
         if (msg["content"] and msg["content"].strip()) or msg.get("tool_name")
     ]
 
-    logger.info("Retrieved %d messages for Claude session %s", len(chat_messages), session_id)
+    logger.info("Retrieved %d messages for Claude session %s", len(chat_messages), validated_id)
 
     return ChatHistoryResponse(
-        session_id=session_id,
+        session_id=validated_id,
         messages=chat_messages,
         message_count=len(chat_messages),
     )
@@ -203,13 +230,13 @@ async def websocket_endpoint(
             {"type": "interrupt"}
 
         Server → Client:
-            {"type": "connected", "connection_id": "conn_xxx", "session_id": "uuid"}
-            {"type": "session_id", "session_id": "uuid"}  # Sent when session ID is captured
+            {"type": "connected", "connectionId": "conn_xxx", "sessionId": "uuid"}
+            {"type": "session_id", "sessionId": "uuid"}  # Sent when session ID is captured
             {"type": "text", "chunk": "..."}
             {"type": "tool_use", "name": "Read", "input": {...}}
             {"type": "thinking", "content": "..."}
-            {"type": "complete", "status": "success", "cost_usd": 0.01, ...}
-            {"type": "error", "error": "..."}
+            {"type": "complete", "status": "success", "costUsd": 0.01, "durationMs": 1200}
+            {"type": "error", "error": "...", "isPermanent": true}
             {"type": "session_taken"}  # Sent when another client takes over
 
     Args:
@@ -251,17 +278,21 @@ async def websocket_endpoint(
         )
 
         # Send connection confirmation
-        await websocket.send_json(
-            {
-                "type": WSMessageType.CONNECTED.value,
-                "connection_id": connection_id,
-                "session_id": agent_session.session_id,
-            }
-        )
+        connected_payload: dict[str, Any] = {
+            "type": WSMessageType.CONNECTED.value,
+            "connection_id": connection_id,
+            "connectionId": connection_id,
+        }
+        if not agent_session.session_id.startswith("pending_"):
+            connected_payload["session_id"] = agent_session.session_id
+            connected_payload["sessionId"] = agent_session.session_id
+
+        await websocket.send_json(connected_payload)
 
         # Replay buffered messages
         for msg in buffered:
             await websocket.send_json(msg)
+        await agent_session_manager.finish_replay(agent_session, connection_id, connection_manager)
 
         # Listen for incoming messages
         while True:
@@ -284,9 +315,14 @@ async def websocket_endpoint(
                         continue
 
                     # Send to agent session
-                    await agent_session_manager.send_user_message(
-                        agent_session.session_id, user_message
+                    accepted = await agent_session_manager.send_user_message(
+                        agent_session.session_id,
+                        user_message,
+                        ws_id=connection_id,
+                        connection_manager=connection_manager,
                     )
+                    if not accepted:
+                        break
 
                 elif msg.type == WSMessageType.INTERRUPT:
                     # TODO: Implement interrupt support
@@ -315,4 +351,4 @@ async def websocket_endpoint(
         if agent_session:
             await agent_session_manager.detach_websocket(agent_session.session_id, connection_id)
         # Cleanup connection
-        connection_manager.disconnect(connection_id)
+        await connection_manager.disconnect(connection_id)

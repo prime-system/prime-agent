@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ChatSessionResponse(BaseModel):
@@ -71,6 +71,7 @@ class WSMessageType(str, Enum):
 
     # Server → Client
     CONNECTED = "connected"
+    SESSION_ID = "session_id"
     SESSION_TAKEN = "session_taken"
     TEXT = "text"
     TOOL_USE = "tool_use"
@@ -93,15 +94,39 @@ class WSOutputMessage(BaseModel):
     Fields vary by message type. Only relevant fields should be populated.
     """
 
+    model_config = ConfigDict(populate_by_name=True)
+
     type: WSMessageType = Field(..., description="Message type")
 
     # Fields for specific message types
-    session_id: str | None = Field(None, description="Session ID (for CONNECTED)")
+    session_id: str | None = Field(
+        None,
+        alias="sessionId",
+        description="Session ID (camelCase preferred; snake_case accepted)",
+    )
+    connection_id: str | None = Field(
+        None,
+        alias="connectionId",
+        description="Connection ID (camelCase preferred; snake_case accepted)",
+    )
     chunk: str | None = Field(None, description="Text chunk (for TEXT)")
     name: str | None = Field(None, description="Tool name (for TOOL_USE)")
     input: dict[str, Any] | None = Field(None, description="Tool input (for TOOL_USE)")
     content: str | None = Field(None, description="Thinking content (for THINKING)")
     status: str | None = Field(None, description="Status (for COMPLETE)")
-    cost_usd: float | None = Field(None, description="Cost in USD (for COMPLETE)")
-    duration_ms: int | None = Field(None, description="Duration in ms (for COMPLETE)")
+    cost_usd: float | None = Field(
+        None,
+        alias="costUsd",
+        description="Cost in USD (camelCase preferred; snake_case accepted)",
+    )
+    duration_ms: int | None = Field(
+        None,
+        alias="durationMs",
+        description="Duration in ms (camelCase preferred; snake_case accepted)",
+    )
     error: str | None = Field(None, description="Error message (for ERROR)")
+    is_permanent: bool | None = Field(
+        None,
+        alias="isPermanent",
+        description="Whether error is permanent (for ERROR)",
+    )

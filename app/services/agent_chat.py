@@ -118,7 +118,7 @@ class AgentChatService:
     def _process_message(
         self,
         message: Any,
-    ) -> dict[str, Any] | None:
+    ) -> list[dict[str, Any]]:
         """
         Convert SDK message to SSE event.
 
@@ -129,33 +129,54 @@ class AgentChatService:
             message: Message from ClaudeSDKClient
 
         Returns:
-            Event dict or None if not a streamable message
+            List of event dicts (may be empty)
         """
         # Skip system messages - they're handled separately
         if isinstance(message, SystemMessage):
-            return None
+            return []
 
+        events: list[dict[str, Any]] = []
         if isinstance(message, AssistantMessage):
             # Process content blocks
             for block in message.content:
                 if isinstance(block, TextBlock):
-                    return {
-                        "type": SSEEventType.TEXT.value,
-                        "chunk": block.text,
-                    }
+                    events.append(
+                        {
+                            "type": SSEEventType.TEXT.value,
+                            "chunk": block.text,
+                        }
+                    )
                 if isinstance(block, ToolUseBlock):
-                    return {
-                        "type": SSEEventType.TOOL_USE.value,
-                        "name": block.name,
-                        "input": block.input,
-                    }
+                    events.append(
+                        {
+                            "type": SSEEventType.TOOL_USE.value,
+                            "name": block.name,
+                            "input": block.input,
+                        }
+                    )
                 if isinstance(block, ThinkingBlock):
-                    return {
-                        "type": SSEEventType.THINKING.value,
-                        "content": block.thinking,
-                    }
+                    events.append(
+                        {
+                            "type": SSEEventType.THINKING.value,
+                            "content": block.thinking,
+                        }
+                    )
 
-        return None
+        return events
+
+    def _legacy_complete_payload(self, message: ResultMessage) -> dict[str, Any]:
+        """Provide snake_case compatibility fields for complete payloads."""
+        return {
+            "cost_usd": message.total_cost_usd,
+            "duration_ms": message.duration_ms,
+        }
+
+    def _camelcase_complete_payload(self, message: ResultMessage) -> dict[str, Any]:
+        """Provide camelCase payload fields for complete payloads."""
+        return {
+            "costUsd": message.total_cost_usd,
+            "durationMs": message.duration_ms,
+        }
 
     def create_client_instance(self, session_id: str | None = None) -> ClaudeSDKClient:
         """
@@ -199,11 +220,12 @@ class AgentChatService:
                         yield {
                             "type": "session_id",
                             "session_id": sdk_session_id,
+                            "sessionId": sdk_session_id,
                         }
 
-                # Convert to event and yield
-                event = self._process_message(message)
-                if event:
+                # Convert to events and yield
+                events = self._process_message(message)
+                for event in events:
                     yield event
 
                 # Handle result message
@@ -217,8 +239,8 @@ class AgentChatService:
                     yield {
                         "type": "complete",
                         "status": "success",
-                        "cost_usd": message.total_cost_usd,
-                        "duration_ms": message.duration_ms,
+                        **self._camelcase_complete_payload(message),
+                        **self._legacy_complete_payload(message),
                     }
 
         except Exception as e:
@@ -286,11 +308,12 @@ class AgentChatService:
                                 yield {
                                     "type": "session_id",
                                     "session_id": sdk_session_id,
+                                    "sessionId": sdk_session_id,
                                 }
 
-                        # Convert to event and yield
-                        event = self._process_message(message)
-                        if event:
+                        # Convert to events and yield
+                        events = self._process_message(message)
+                        for event in events:
                             yield event
 
                         # Handle result message
@@ -310,9 +333,10 @@ class AgentChatService:
                             yield {
                                 "type": SSEEventType.COMPLETE.value,
                                 "status": "success",
-                                "cost_usd": message.total_cost_usd,
-                                "duration_ms": message.duration_ms,
+                                **self._camelcase_complete_payload(message),
+                                **self._legacy_complete_payload(message),
                                 "session_id": current_session_id,
+                                "sessionId": current_session_id,
                             }
 
         except asyncio.CancelledError:
