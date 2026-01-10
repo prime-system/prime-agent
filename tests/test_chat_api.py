@@ -55,7 +55,12 @@ def test_websocket_connected_session_id_and_complete():
     mock_agent_service.create_client_instance.return_value = mock_client
     mock_agent_service.process_message_stream = _message_stream
 
-    agent_session_manager = AgentSessionManager(agent_service=mock_agent_service)
+    mock_push_notification_service = MagicMock()
+    mock_push_notification_service.send_notification = AsyncMock()
+    agent_session_manager = AgentSessionManager(
+        agent_service=mock_agent_service,
+        push_notification_service=mock_push_notification_service,
+    )
     mock_chat_session_manager = MagicMock()
 
     chat.connection_manager.active_connections.clear()
@@ -94,7 +99,12 @@ def test_websocket_error_is_permanent():
     mock_agent_service.create_client_instance.return_value = mock_client
     mock_agent_service.process_message_stream = _message_stream
 
-    agent_session_manager = AgentSessionManager(agent_service=mock_agent_service)
+    mock_push_notification_service = MagicMock()
+    mock_push_notification_service.send_notification = AsyncMock()
+    agent_session_manager = AgentSessionManager(
+        agent_service=mock_agent_service,
+        push_notification_service=mock_push_notification_service,
+    )
     mock_chat_session_manager = MagicMock()
 
     chat.connection_manager.active_connections.clear()

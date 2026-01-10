@@ -33,6 +33,7 @@ def vault_browser_client(temp_vault: Path):
         chat_session_manager=MagicMock(),
         agent_chat_service=MagicMock(),
         agent_session_manager=MagicMock(),
+        push_notification_service=MagicMock(),
         relay_client=MagicMock(),
         claude_session_api=MagicMock(),
         health_service=MagicMock(),

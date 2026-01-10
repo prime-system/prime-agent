@@ -2,21 +2,19 @@
 
 import logging
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.config import settings
-from app.dependencies import get_relay_client, verify_token
+from app.dependencies import get_push_notification_service, verify_token
 from app.models.push import (
     DeviceListResponse,
     DeviceRegisterRequest,
-    DeviceResult,
     NotificationSendRequest,
     NotificationSendResponse,
     PushResponse,
 )
 from app.services import device_registry
-from app.services.relay_client import PrimePushRelayClient
+from app.services.push_notifications import PushNotificationService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["push"])
@@ -85,7 +83,7 @@ async def register_device(
 @router.post("/notifications/send", response_model=NotificationSendResponse)
 async def send_notification(
     request: NotificationSendRequest,
-    relay_client: PrimePushRelayClient = Depends(get_relay_client),
+    push_notification_service: PushNotificationService = Depends(get_push_notification_service),
     _: None = Depends(verify_token),
 ) -> NotificationSendResponse:
     """
@@ -94,101 +92,20 @@ async def send_notification(
     Uses stored push_url (capability URL) to send notifications.
     """
     try:
-        # Load devices from registry
-        devices = await device_registry.list_devices(
-            devices_file=settings.apn_devices_file,
+        summary = await push_notification_service.send_notification(
+            title=request.title,
+            body=request.body,
+            data=request.data,
             device_filter=request.device_filter,
         )
-
-        sent = 0
-        failed = 0
-        invalid_tokens_removed = 0
-        device_results: list[DeviceResult] = []
-
-        # Send to each device via their push_url
-        for device in devices:
-            device_name = device.device_name or device.device_type
-
-            try:
-                queued = await relay_client.send_push(
-                    push_url=device.push_url,
-                    title=request.title,
-                    body=request.body,
-                    data=request.data,
-                )
-
-                if queued:
-                    sent += 1
-                    device_results.append(DeviceResult(name=device_name, status="sent", error=None))
-                else:
-                    failed += 1
-                    device_results.append(
-                        DeviceResult(name=device_name, status="failed", error="Not queued")
-                    )
-
-            except httpx.HTTPStatusError as e:
-                # Handle specific HTTP errors
-                if e.response.status_code == 410:
-                    # Gone - invalid binding, remove device
-                    await device_registry.remove_device(
-                        settings.apn_devices_file,
-                        device.installation_id,
-                    )
-                    invalid_tokens_removed += 1
-                    device_results.append(
-                        DeviceResult(
-                            name=device_name,
-                            status="invalid_binding",
-                            error="Binding no longer valid (removed)",
-                        )
-                    )
-                    logger.info(
-                        "Device removed due to invalid binding",
-                        extra={"installation_id": device.installation_id},
-                    )
-                else:
-                    failed += 1
-                    device_results.append(
-                        DeviceResult(name=device_name, status="failed", error=str(e))
-                    )
-                    logger.error(
-                        "Failed to send to device",
-                        extra={
-                            "installation_id": device.installation_id,
-                            "status_code": e.response.status_code,
-                            "error": str(e),
-                        },
-                    )
-
-            except Exception as e:
-                logger.error(
-                    "Failed to send to device",
-                    extra={
-                        "installation_id": device.installation_id,
-                        "error": str(e),
-                        "error_type": type(e).__name__,
-                    },
-                )
-                failed += 1
-                device_results.append(DeviceResult(name=device_name, status="failed", error=str(e)))
-
-        success = failed == 0
-
-        logger.info(
-            "Notification send completed",
-            extra={
-                "sent": sent,
-                "failed": failed,
-                "invalid_tokens_removed": invalid_tokens_removed,
-            },
-        )
+        success = summary.failed == 0
 
         return NotificationSendResponse(
             success=success,
-            sent=sent,
-            failed=failed,
-            invalid_tokens_removed=invalid_tokens_removed,
-            devices=device_results,
+            sent=summary.sent,
+            failed=summary.failed,
+            invalid_tokens_removed=summary.invalid_tokens_removed,
+            devices=summary.device_results,
         )
 
     except Exception as e:

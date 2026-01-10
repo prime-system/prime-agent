@@ -38,6 +38,7 @@ from app.services.health import HealthCheckService
 from app.services.inbox import InboxService
 from app.services.lock import init_vault_lock
 from app.services.logs import LogService
+from app.services.push_notifications import PushNotificationService
 from app.services.relay_client import PrimePushRelayClient
 from app.services.vault import VaultService
 from app.services.vault_browser import VaultBrowserService
@@ -156,8 +157,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     git_service.initialize()
     vault_service.ensure_structure()
 
+    # Initialize PrimePushRelay client
+    relay_client = PrimePushRelayClient(timeout_seconds=10)
+
+    # Initialize push notification service
+    push_notification_service = PushNotificationService(
+        devices_file=settings.apn_devices_file,
+        relay_client=relay_client,
+    )
+
     # Initialize AgentSessionManager
-    agent_session_manager = AgentSessionManager(agent_service=agent_chat_service)
+    agent_session_manager = AgentSessionManager(
+        agent_service=agent_chat_service,
+        push_notification_service=push_notification_service,
+    )
     agent_session_manager.start_cleanup_loop()
 
     # Initialize Claude session API
@@ -173,9 +186,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         version=get_version(),
     )
 
-    # Initialize PrimePushRelay client
-    relay_client = PrimePushRelayClient(timeout_seconds=10)
-
     # Initialize command service
     command_service = CommandService(str(vault_service.vault_path))
 
@@ -190,6 +200,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         chat_session_manager=chat_session_manager,
         agent_chat_service=agent_chat_service,
         agent_session_manager=agent_session_manager,
+        push_notification_service=push_notification_service,
         relay_client=relay_client,
         claude_session_api=claude_session_api,
         health_service=health_service,

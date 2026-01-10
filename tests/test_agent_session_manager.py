@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 import pytest
 
 from app.services.agent_session_manager import AgentSessionManager
+from app.services.push_notifications import PushSendSummary
 
 
 @pytest.fixture
@@ -15,6 +16,21 @@ def mock_agent_service():
     service = Mock()
     service.create_client_instance = Mock()
     service.process_message_stream = AsyncMock()
+    return service
+
+
+@pytest.fixture
+def mock_push_notification_service():
+    """Create mock PushNotificationService."""
+    service = MagicMock()
+    service.send_notification = AsyncMock(
+        return_value=PushSendSummary(
+            sent=1,
+            failed=0,
+            invalid_tokens_removed=0,
+            device_results=[],
+        )
+    )
     return service
 
 
@@ -37,9 +53,12 @@ def mock_connection_manager():
 
 
 @pytest.fixture
-async def session_manager(mock_agent_service):
+async def session_manager(mock_agent_service, mock_push_notification_service):
     """Create AgentSessionManager instance."""
-    manager = AgentSessionManager(agent_service=mock_agent_service)
+    manager = AgentSessionManager(
+        agent_service=mock_agent_service,
+        push_notification_service=mock_push_notification_service,
+    )
     yield manager
     # Cleanup
     await manager.terminate_all_sessions()
@@ -401,6 +420,135 @@ async def test_early_termination(session_manager, mock_agent_service, mock_clien
     await asyncio.sleep(0.1)
 
     # Session should be terminated
+    assert "test-session" not in session_manager.sessions
+
+
+@pytest.mark.asyncio
+async def test_completion_notification_sent_when_disconnected(
+    session_manager, mock_agent_service, mock_client, mock_push_notification_service
+):
+    """Send notification after completion with no WebSocket."""
+    mock_agent_service.create_client_instance.return_value = mock_client
+    session_manager.GRACE_PERIOD_SECONDS = 0
+
+    async def mock_stream(_client, _message):
+        yield {"type": "complete", "status": "success", "costUsd": 0.01, "durationMs": 1000}
+
+    mock_agent_service.process_message_stream = mock_stream
+
+    state = await session_manager.get_or_create_session("test-session")
+    session_manager.sessions["test-session"] = state
+
+    queued = await session_manager.send_user_message("test-session", "test")
+    assert queued
+
+    await asyncio.sleep(0.1)
+
+    mock_push_notification_service.send_notification.assert_awaited_once()
+    kwargs = mock_push_notification_service.send_notification.call_args.kwargs
+    assert kwargs["title"] == "Chat response ready"
+    assert kwargs["body"] == "Your chat response is complete."
+    assert kwargs["data"]["type"] == "chat_complete"
+    assert kwargs["data"]["session_id"] == "test-session"
+    assert kwargs["data"]["status"] == "success"
+    assert kwargs["data"]["costUsd"] == 0.01
+    assert kwargs["data"]["durationMs"] == 1000
+
+    assert "test-session" not in session_manager.sessions
+
+
+@pytest.mark.asyncio
+async def test_completion_notification_skipped_when_connected(
+    session_manager,
+    mock_agent_service,
+    mock_client,
+    mock_push_notification_service,
+    mock_connection_manager,
+    monkeypatch,
+):
+    """Skip notification when a WebSocket is connected."""
+    mock_agent_service.create_client_instance.return_value = mock_client
+    session_manager.GRACE_PERIOD_SECONDS = 0
+
+    async def mock_stream(_client, _message):
+        yield {"type": "complete", "status": "success"}
+
+    mock_agent_service.process_message_stream = mock_stream
+    monkeypatch.setattr("app.api.chat.connection_manager", mock_connection_manager)
+
+    state = await session_manager.get_or_create_session("test-session")
+    session_manager.sessions["test-session"] = state
+    async with state.ws_lock:
+        state.connected_ws_id = "ws-1"
+
+    queued = await session_manager.send_user_message("test-session", "test")
+    assert queued
+
+    await asyncio.sleep(0.1)
+
+    mock_push_notification_service.send_notification.assert_not_called()
+    assert "test-session" in session_manager.sessions
+
+
+@pytest.mark.asyncio
+async def test_completion_notification_skipped_on_reconnect_during_grace(
+    session_manager,
+    mock_agent_service,
+    mock_client,
+    mock_push_notification_service,
+):
+    """Skip notification if WebSocket reconnects during grace period."""
+    mock_agent_service.create_client_instance.return_value = mock_client
+    session_manager.GRACE_PERIOD_SECONDS = 0.1
+
+    async def mock_stream(_client, _message):
+        yield {"type": "complete", "status": "success"}
+
+    mock_agent_service.process_message_stream = mock_stream
+
+    state = await session_manager.get_or_create_session("test-session")
+    session_manager.sessions["test-session"] = state
+
+    async def reconnect():
+        await asyncio.sleep(0.05)
+        async with state.ws_lock:
+            state.connected_ws_id = "ws-1"
+
+    asyncio.create_task(reconnect())
+
+    queued = await session_manager.send_user_message("test-session", "test")
+    assert queued
+
+    await asyncio.sleep(0.2)
+
+    mock_push_notification_service.send_notification.assert_not_called()
+    assert "test-session" in session_manager.sessions
+
+
+@pytest.mark.asyncio
+async def test_completion_notification_failure_does_not_raise(
+    session_manager,
+    mock_agent_service,
+    mock_client,
+    mock_push_notification_service,
+):
+    """Notification failures should not crash the session loop."""
+    mock_agent_service.create_client_instance.return_value = mock_client
+    session_manager.GRACE_PERIOD_SECONDS = 0
+
+    async def mock_stream(_client, _message):
+        yield {"type": "complete", "status": "success"}
+
+    mock_agent_service.process_message_stream = mock_stream
+    mock_push_notification_service.send_notification.side_effect = RuntimeError("fail")
+
+    state = await session_manager.get_or_create_session("test-session")
+    session_manager.sessions["test-session"] = state
+
+    queued = await session_manager.send_user_message("test-session", "test")
+    assert queued
+
+    await asyncio.wait_for(state.processing_task, timeout=1)
     assert "test-session" not in session_manager.sessions
 
 

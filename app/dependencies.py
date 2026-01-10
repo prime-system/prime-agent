@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from app.services.health import HealthCheckService
     from app.services.inbox import InboxService
     from app.services.logs import LogService
+    from app.services.push_notifications import PushNotificationService
     from app.services.relay_client import PrimePushRelayClient
     from app.services.vault import VaultService
     from app.services.vault_browser import VaultBrowserService
@@ -106,6 +107,12 @@ async def get_relay_client() -> PrimePushRelayClient:
     """Get PrimePushRelay client via dependency injection."""
     container = get_container()
     return container.relay_client
+
+
+async def get_push_notification_service() -> PushNotificationService:
+    """Get push notification service via dependency injection."""
+    container = get_container()
+    return container.push_notification_service
 
 
 async def get_claude_session_api() -> ClaudeSessionAPI:

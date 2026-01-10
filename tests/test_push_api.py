@@ -32,8 +32,9 @@ async def push_app(temp_devices_file, mock_relay_client, monkeypatch):
     """Create a test FastAPI app with push router."""
     from app.api import push
     from app.config import settings
-    from app.dependencies import get_relay_client
+    from app.dependencies import get_push_notification_service
     from app.services import device_registry
+    from app.services.push_notifications import PushNotificationService
 
     # Initialize async file lock
     await device_registry.init_file_lock()
@@ -46,8 +47,12 @@ async def push_app(temp_devices_file, mock_relay_client, monkeypatch):
     app = FastAPI(title="Prime Server Test")
     app.include_router(push.router)
 
-    # Override relay client dependency
-    app.dependency_overrides[get_relay_client] = lambda: mock_relay_client
+    # Override push notification service dependency
+    push_notification_service = PushNotificationService(
+        devices_file=temp_devices_file,
+        relay_client=mock_relay_client,
+    )
+    app.dependency_overrides[get_push_notification_service] = lambda: push_notification_service
 
     return app
 

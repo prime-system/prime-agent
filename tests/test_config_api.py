@@ -47,6 +47,7 @@ def client(temp_vault, test_app, mock_settings, auth_headers, monkeypatch):
     from app.services.inbox import InboxService
     from app.services.command import CommandService
     from app.services.logs import LogService
+    from app.services.push_notifications import PushNotificationService
     from app.services.relay_client import PrimePushRelayClient
     from app.services.vault import VaultService
 
@@ -54,6 +55,7 @@ def client(temp_vault, test_app, mock_settings, auth_headers, monkeypatch):
     vault_service.ensure_structure()
     health_service = HealthCheckService(vault_service=vault_service)
     relay_client = MagicMock(spec=PrimePushRelayClient)
+    push_notification_service = MagicMock(spec=PushNotificationService)
     command_service = CommandService(str(vault_service.vault_path))
     agent_identity_service = MagicMock(spec=AgentIdentityService)
     agent_identity_service.get_cached_identity.return_value = "agent-123"
@@ -69,6 +71,7 @@ def client(temp_vault, test_app, mock_settings, auth_headers, monkeypatch):
         chat_session_manager=MagicMock(),
         agent_chat_service=MagicMock(),
         agent_session_manager=MagicMock(),
+        push_notification_service=push_notification_service,
         relay_client=relay_client,
         claude_session_api=MagicMock(),
         health_service=health_service,

@@ -16,6 +16,7 @@ from uuid import uuid4
 from claude_agent_sdk import ClaudeSDKClient
 
 from app.services.agent_chat import AgentChatService
+from app.services.push_notifications import PushNotificationService
 
 logger = logging.getLogger(__name__)
 
@@ -46,19 +47,26 @@ class AgentSessionManager:
     - 30-minute timeout for inactive sessions
     - Exclusive connections (one client at a time)
     - Early termination when response completes with no connected client
+    - Push notification when response completes without a connected client
     """
 
     TIMEOUT_SECONDS = 1800  # 30 minutes
     GRACE_PERIOD_SECONDS = 5  # After completion, wait before termination
 
-    def __init__(self, agent_service: AgentChatService):
+    def __init__(
+        self,
+        agent_service: AgentChatService,
+        push_notification_service: PushNotificationService,
+    ):
         """
         Initialize agent session manager.
 
         Args:
             agent_service: AgentChatService for creating SDK clients
+            push_notification_service: PushNotificationService for completion notifications
         """
         self.agent_service = agent_service
+        self.push_notification_service = push_notification_service
         self.sessions: dict[str, AgentSessionState] = {}
         self._lock = asyncio.Lock()
         self._cleanup_task: asyncio.Task[None] | None = None
@@ -374,7 +382,9 @@ class AgentSessionManager:
                             await self._dispatch_event(state, event)
 
                             # Check for completion and early termination
-                            if event.get("type") == "complete" and await self._should_terminate_after_complete(state):
+                            if event.get(
+                                "type"
+                            ) == "complete" and await self._handle_completion_event(state, event):
                                 terminate_after_message = True
 
                 finally:
@@ -431,8 +441,12 @@ class AgentSessionManager:
         async with state.ws_lock:
             state.message_buffer.append(event)
 
-    async def _should_terminate_after_complete(self, state: AgentSessionState) -> bool:
-        """Check if session should terminate after completion with no client."""
+    async def _handle_completion_event(
+        self,
+        state: AgentSessionState,
+        event: dict[str, Any],
+    ) -> bool:
+        """Handle completion events and decide whether to terminate."""
         async with state.ws_lock:
             connected = state.connected_ws_id is not None
 
@@ -446,7 +460,56 @@ class AgentSessionManager:
         await asyncio.sleep(self.GRACE_PERIOD_SECONDS)
 
         async with state.ws_lock:
-            return state.connected_ws_id is None
+            still_disconnected = state.connected_ws_id is None
+
+        if not still_disconnected:
+            return False
+
+        await self._send_completion_notification(state, event)
+        return True
+
+    async def _send_completion_notification(
+        self,
+        state: AgentSessionState,
+        event: dict[str, Any],
+    ) -> None:
+        """Send push notification for completed responses when disconnected."""
+        status_value = event.get("status") or "success"
+        session_id = event.get("session_id") or event.get("sessionId") or state.session_id
+        data: dict[str, Any] = {
+            "type": "chat_complete",
+            "session_id": session_id,
+            "status": status_value,
+        }
+
+        for key in ("costUsd", "durationMs"):
+            if key in event and event[key] is not None:
+                data[key] = event[key]
+
+        try:
+            summary = await self.push_notification_service.send_notification(
+                title="Chat response ready",
+                body="Your chat response is complete.",
+                data=data,
+            )
+            logger.info(
+                "Chat completion notification sent",
+                extra={
+                    "session_id": session_id,
+                    "sent": summary.sent,
+                    "failed": summary.failed,
+                    "invalid_tokens_removed": summary.invalid_tokens_removed,
+                },
+            )
+        except Exception as e:
+            logger.exception(
+                "Failed to send chat completion notification",
+                extra={
+                    "session_id": session_id,
+                    "error": "push_notification_failed",
+                    "error_type": type(e).__name__,
+                },
+            )
 
     async def _cleanup_state(
         self,

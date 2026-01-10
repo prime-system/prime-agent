@@ -114,6 +114,7 @@ def client(temp_vault, mock_git_service, test_app):
     from app.services.health import HealthCheckService
     from app.services.command import CommandService
     from app.services.relay_client import PrimePushRelayClient
+    from app.services.push_notifications import PushNotificationService
     from app.services.agent_identity import AgentIdentityService
     from app.config import settings
 
@@ -136,6 +137,7 @@ def client(temp_vault, mock_git_service, test_app):
         version="test-version",
     )
     relay_client = MagicMock(spec=PrimePushRelayClient)
+    push_notification_service = MagicMock(spec=PushNotificationService)
     command_service = CommandService(str(vault_service.vault_path))
     agent_identity_service = MagicMock(spec=AgentIdentityService)
 
@@ -149,6 +151,7 @@ def client(temp_vault, mock_git_service, test_app):
         chat_session_manager=chat_session_manager,
         agent_chat_service=agent_chat_service,
         agent_session_manager=agent_session_manager,
+        push_notification_service=push_notification_service,
         relay_client=relay_client,
         claude_session_api=claude_session_api,
         health_service=health_service,
