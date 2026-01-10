@@ -19,6 +19,7 @@ from app.api import (
     monitoring,
     processing,
     push,
+    vault_browser,
 )
 from app.config import settings
 from app.logging_config import configure_json_logging
@@ -39,6 +40,7 @@ from app.services.lock import init_vault_lock
 from app.services.logs import LogService
 from app.services.relay_client import PrimePushRelayClient
 from app.services.vault import VaultService
+from app.services.vault_browser import VaultBrowserService
 from app.services.worker import AgentWorker
 from app.version import get_version
 
@@ -103,6 +105,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     vault_service = VaultService(settings.vault_path)
     agent_identity_service = AgentIdentityService(Path(settings.data_path))
     await agent_identity_service.get_or_create_identity()  # Load/create at startup
+    vault_browser_service = VaultBrowserService(vault_service=vault_service)
 
     git_service = GitService(
         vault_path=settings.vault_path,
@@ -179,6 +182,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Initialize service container (replaces per-module init_services calls)
     init_container(
         vault_service=vault_service,
+        vault_browser_service=vault_browser_service,
         git_service=git_service,
         inbox_service=inbox_service,
         agent_service=agent_service,
@@ -267,3 +271,4 @@ app.include_router(health.router)
 app.include_router(monitoring.router, tags=["monitoring"])
 app.include_router(processing.router)
 app.include_router(push.router, tags=["push"])
+app.include_router(vault_browser.router, tags=["vault"])

@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from app.services.logs import LogService
     from app.services.relay_client import PrimePushRelayClient
     from app.services.vault import VaultService
+    from app.services.vault_browser import VaultBrowserService
 
 
 class ServiceContainer:
@@ -35,6 +36,7 @@ class ServiceContainer:
     def __init__(
         self,
         vault_service: VaultService,
+        vault_browser_service: VaultBrowserService,
         git_service: GitService,
         inbox_service: InboxService,
         agent_service: AgentService,
@@ -50,6 +52,7 @@ class ServiceContainer:
     ) -> None:
         """Initialize service container with all required services."""
         self.vault_service = vault_service
+        self.vault_browser_service = vault_browser_service
         self.git_service = git_service
         self.inbox_service = inbox_service
         self.agent_service = agent_service
@@ -81,11 +84,13 @@ def init_container(
     health_service: HealthCheckService,
     command_service: CommandService,
     agent_identity_service: AgentIdentityService,
+    vault_browser_service: VaultBrowserService | None = None,
 ) -> None:
     """Initialize service container (called once in FastAPI lifespan).
 
     Args:
         vault_service: VaultService instance for vault operations
+        vault_browser_service: VaultBrowserService instance for browsing files
         git_service: GitService instance for git operations
         inbox_service: InboxService instance for capture formatting
         agent_service: AgentService instance for agent operations
@@ -100,8 +105,15 @@ def init_container(
         agent_identity_service: AgentIdentityService for persistent agent ID
     """
     global _container
+
+    if vault_browser_service is None:
+        from app.services.vault_browser import VaultBrowserService
+
+        vault_browser_service = VaultBrowserService(vault_service=vault_service)
+
     _container = ServiceContainer(
         vault_service=vault_service,
+        vault_browser_service=vault_browser_service,
         git_service=git_service,
         inbox_service=inbox_service,
         agent_service=agent_service,

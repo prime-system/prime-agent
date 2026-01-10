@@ -550,6 +550,39 @@ POST /git/sync
 Authorization: Bearer {AUTH_TOKEN}
 ```
 
+### Vault Browser (Read-Only)
+
+**List Folder Children:**
+```http
+GET /api/v1/vault/folders?path=/Daily
+Authorization: Bearer {AUTH_TOKEN}
+```
+
+**Optional Query Params:**
+- `limit` (default 200, max 1000)
+- `cursor` (opaque pagination cursor)
+- `sort` (`name`, `modifiedAt`, `size`)
+- `order` (`asc`, `desc`)
+- `include` (`folders,files`)
+- `showHidden` (`true` or `false`)
+
+**Caching:**
+- Response includes `ETag`
+- Send `If-None-Match` to receive `304 Not Modified`
+
+**File Metadata:**
+```http
+GET /api/v1/vault/files/meta?path=/Notes/idea.md
+Authorization: Bearer {AUTH_TOKEN}
+```
+
+**File Content (Range Supported):**
+```http
+GET /api/v1/vault/files/content?path=/Notes/idea.md
+Authorization: Bearer {AUTH_TOKEN}
+Range: bytes=0-1023
+```
+
 ### Push Notifications (APNs)
 
 **Register Device:**

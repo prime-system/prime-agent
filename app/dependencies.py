@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from app.services.logs import LogService
     from app.services.relay_client import PrimePushRelayClient
     from app.services.vault import VaultService
+    from app.services.vault_browser import VaultBrowserService
 
 security = HTTPBearer(auto_error=False)
 
@@ -51,6 +52,12 @@ async def get_vault_service() -> VaultService:
     """Get vault service via dependency injection."""
     container = get_container()
     return container.vault_service
+
+
+async def get_vault_browser_service() -> VaultBrowserService:
+    """Get vault browser service via dependency injection."""
+    container = get_container()
+    return container.vault_browser_service
 
 
 async def get_git_service() -> GitService:
