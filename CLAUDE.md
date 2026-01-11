@@ -327,10 +327,9 @@ base_url: https://app.example.com
 
 **Capture Flow** (app/api/capture.py):
 1. POST `/api/v1/capture` receives raw thought from client
-2. Generate title with Claude Haiku if `{title}` in file pattern
-3. Write to inbox file with YAML frontmatter
-4. Queue git commit in background (non-blocking)
-5. Return immediately to client
+2. Write to inbox file with YAML frontmatter
+3. Queue git commit in background (non-blocking)
+4. Return immediately to client
 
 **Processing Flow** (app/services/worker.py):
 1. POST `/api/v1/processing/trigger` fires AgentWorker
@@ -806,7 +805,6 @@ This codebase uses custom exception classes that include contextual information 
 - `ConfigurationError` - Configuration loading/validation errors
 - `ValidationError` - Input validation failures
 - `InboxError` - Inbox file operation errors
-- `TitleGenerationError` - Title generation API errors
 
 **When to Catch Broad Exceptions:**
 

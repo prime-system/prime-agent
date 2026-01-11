@@ -19,7 +19,7 @@ Place `settings.yaml` in your vault root under `.prime/`:
 
 - **Flexible Folder Structure** - Use your own inbox folder name (e.g., "07-Inbox" for Obsidian numbering)
 - **Organize by Time** - Group captures into weekly subfolders automatically
-- **Smart Filenames** - Use AI-generated titles, timestamps, or any combination
+- **Smart Filenames** - Use timestamps and any combination of available placeholders
 - **No Breaking Changes** - If `.prime.yaml` doesn't exist, uses sensible defaults
 
 ---
@@ -94,7 +94,6 @@ inbox:
 | `{source}` | Device source | `iphone`, `ipad`, `mac` |
 | `{iso_year}` | ISO year | `2026` |
 | `{iso_week}` | ISO week number | `01`, `52` |
-| `{title}` | AI-generated title (see below) | `meeting-notes-with-team` |
 
 **Pattern Examples:**
 
@@ -103,14 +102,6 @@ inbox:
 file_pattern: "{year}-{month}-{day}_{hour}-{minute}-{second}_{source}.md"
 # Result: 2026-01-02_14-30-45_iphone.md
 
-# AI-generated title only
-file_pattern: "{title}.md"
-# Result: meeting-notes-with-team.md
-
-# Date with AI title
-file_pattern: "{year}-{month}-{day}_{title}.md"
-# Result: 2026-01-02_meeting-notes-with-team.md
-
 # ISO week with timestamp
 file_pattern: "{iso_year}-W{iso_week}_{hour}-{minute}_{source}.md"
 # Result: 2026-W01_14-30_iphone.md
@@ -118,57 +109,11 @@ file_pattern: "{iso_year}-W{iso_week}_{hour}-{minute}_{source}.md"
 # Simple daily capture
 file_pattern: "{year}-{month}-{day}_{source}.md"
 # Result: 2026-01-02_iphone.md
+
+# Compact format
+file_pattern: "{year}{month}{day}_{hour}{minute}_{source}.md"
+# Result: 20260102_1430_iphone.md
 ```
-
----
-
-## AI-Generated Titles ({title})
-
-**When you use `{title}` in your pattern, Prime generates smart titles using Claude Haiku.**
-
-### How It Works
-
-1. **Analyze Content** - Claude reads your capture text
-2. **Generate Title** - Creates a short, descriptive title (3-6 words)
-3. **Sanitize** - Makes it filesystem-safe (lowercase, hyphens, no special chars)
-4. **Use in Filename** - Replaces `{title}` in your pattern
-
-### Examples
-
-**Capture text:**
-> "Had a great meeting with the development team today. We discussed the new authentication system and decided to move forward with JWT tokens."
-
-**Generated title:**
-`meeting-with-dev-team`
-
-**Resulting filename (with pattern `{title}.md`):**
-`meeting-with-dev-team.md`
-
----
-
-**Capture text:**
-> "Need to buy groceries: milk, eggs, bread, coffee"
-
-**Generated title:**
-`grocery-shopping-list`
-
-**Resulting filename (with pattern `{year}-{month}-{day}_{title}.md`):**
-`2026-01-02_grocery-shopping-list.md`
-
-### Performance
-
-- **Speed:** Adds ~100-150ms to capture time (Claude Haiku is very fast)
-- **Cost:** ~$0.0001 per title generation (minimal)
-- **Fallback:** If generation fails, uses first few words of capture text
-- **Only When Needed:** Title generation only runs if `{title}` is in your pattern
-
-### Title Guidelines
-
-Titles are automatically:
-- **Short** (3-6 words, max 50 characters)
-- **Descriptive** (captures the main idea)
-- **Filesystem-safe** (lowercase, hyphens instead of spaces)
-- **No special characters** (only a-z, 0-9, hyphens)
 
 ---
 
@@ -232,29 +177,6 @@ the new authentication system and decided to move forward with JWT tokens.
 
 ## Configuration Examples
 
-### Minimalist (AI Titles Only)
-
-Perfect for clean, descriptive filenames without timestamps:
-
-```yaml
-inbox:
-  folder: "Inbox"
-  weekly_subfolders: false
-  file_pattern: "{title}.md"
-```
-
-**Result:** `Inbox/meeting-with-dev-team.md`
-
-**Pros:**
-- Clean, human-readable filenames
-- Easy to browse in file explorer
-- Descriptive at a glance
-
-**Cons:**
-- Adds ~100ms to capture time
-- No chronological sorting
-- Potential filename conflicts (rare, but possible)
-
 ### Organized by Week (Recommended Default)
 
 Best balance of organization and flexibility:
@@ -271,35 +193,12 @@ inbox:
 **Pros:**
 - Weekly folders keep things organized
 - Chronologically sorted within folders
-- Fast (no AI generation)
+- Fast capture processing
 - Never conflicts
 
 **Cons:**
 - Less human-readable filenames
 - Can't tell content at a glance
-
-### Date + Title Hybrid
-
-Best of both worlds - organized and descriptive:
-
-```yaml
-inbox:
-  folder: "Captures"
-  weekly_subfolders: true
-  file_pattern: "{year}-{month}-{day}_{title}.md"
-```
-
-**Result:** `Captures/2026-W01/2026-01-02_meeting-with-dev-team.md`
-
-**Pros:**
-- Descriptive filenames
-- Chronologically sorted
-- Organized in weekly folders
-- No conflicts (date prevents them)
-
-**Cons:**
-- Adds ~100ms to capture time
-- Longer filenames
 
 ### Simple Daily Captures
 
@@ -317,13 +216,13 @@ inbox:
 **Pros:**
 - Very simple structure
 - One file per source per week
-- Fast (no AI generation)
+- Fast capture processing
 
 **Cons:**
 - Multiple captures append to same file
 - Less granular organization
 
-### Power User (Everything)
+### Compact Format
 
 Maximum information in filenames:
 
@@ -331,20 +230,19 @@ Maximum information in filenames:
 inbox:
   folder: "00-Inbox"
   weekly_subfolders: true
-  file_pattern: "{iso_year}W{iso_week}_{year}-{month}-{day}_{hour}{minute}_{source}_{title}.md"
+  file_pattern: "{iso_year}W{iso_week}_{year}-{month}-{day}_{hour}{minute}_{source}.md"
 ```
 
-**Result:** `00-Inbox/2026-W01/2026W01_2026-01-02_1430_iphone_meeting-with-dev-team.md`
+**Result:** `00-Inbox/2026-W01/2026W01_2026-01-02_1430_iphone.md`
 
 **Pros:**
 - Everything at a glance
 - Sortable by week, date, time
-- Descriptive title
+- Compact format
 
 **Cons:**
-- Very long filenames
-- Adds ~100ms to capture time
-- Potentially unwieldy
+- Less human-readable than spaced format
+- Potentially difficult to parse visually
 
 ---
 
@@ -364,27 +262,8 @@ inbox:
 
 After a week, evaluate:
 - Are the filenames useful or confusing?
-- Would titles help you find things?
 - Is the weekly organization working?
-
-### Use AI Titles Sparingly
-
-The `{title}` placeholder is powerful but adds latency:
-
-**Good use cases:**
-- Important thoughts you'll want to find later
-- Meeting notes and summaries
-- Project ideas and planning
-- Research notes
-
-**Skip for:**
-- Quick todos ("buy milk")
-- Testing/debugging captures
-- Voice memo transcriptions
-- Time-sensitive captures where speed matters
-
-**Hybrid approach (recommended):**
-Use timestamps by default, switch to title pattern for important captures by updating `.prime.yaml` temporarily.
+- Do you need more or less detail in filenames?
 
 ### Weekly Subfolders Recommended
 
@@ -406,14 +285,14 @@ Stick to one pattern. Changing patterns creates inconsistent filenames across yo
 
 **Bad:**
 ```yaml
-# Week 1: timestamps
+# Week 1: timestamps with seconds
 file_pattern: "{year}-{month}-{day}_{hour}-{minute}-{second}_{source}.md"
 
-# Week 2: titles (changed mind)
-file_pattern: "{title}.md"
+# Week 2: simple dates (changed mind)
+file_pattern: "{year}-{month}-{day}_{source}.md"
 
-# Week 3: hybrid (changed again)
-file_pattern: "{year}-{month}-{day}_{title}.md"
+# Week 3: ISO week format (changed again)
+file_pattern: "{iso_year}-W{iso_week}_{source}.md"
 ```
 
 **Result:** Mixed naming in your vault, hard to browse.
@@ -433,20 +312,6 @@ Before committing to a pattern:
    - Does the organization make sense?
 5. Adjust and test again if needed
 
-### Performance Considerations
-
-Title generation adds ~100-150ms per capture. This is negligible for most workflows, but consider:
-
-**Fast workflow (no titles):**
-- Capture → API → Write → Done: ~50ms total
-- Perfect for rapid-fire voice captures
-
-**Descriptive workflow (with titles):**
-- Capture → API → Generate title → Write → Done: ~150-200ms total
-- Still very fast, adds discoverability
-
-Choose based on your capture frequency and patience.
-
 ### Obsidian Integration
 
 If using Obsidian for viewing your vault:
@@ -465,8 +330,8 @@ inbox:
 
 **Filename considerations:**
 - Obsidian search works regardless of filename pattern
-- Consider titles for better quick-switcher experience
 - Timestamps sort chronologically in file explorer
+- Use descriptive folder names for easier navigation
 
 ---
 
@@ -503,33 +368,6 @@ ls -la /vault/.prime/inbox/  # or your custom inbox folder
 ---
 
 ## Troubleshooting
-
-### Title Generation Not Working
-
-**Symptom:** Files have "untitled" or simplified names instead of generated titles
-
-**Causes:**
-1. Pattern doesn't include `{title}` placeholder
-2. Anthropic API key is invalid/expired
-3. Network connectivity issues
-4. Budget limit exceeded
-
-**Solutions:**
-```yaml
-# Check your pattern includes {title}
-inbox:
-  file_pattern: "{title}.md"  # Must have {title}
-
-# Check server logs
-docker-compose logs primeai | grep -i "title"
-
-# Verify API key
-curl https://api.anthropic.com/v1/messages \
-  -H "x-api-key: $ANTHROPIC_API_KEY" \
-  -H "anthropic-version: 2023-06-01" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"claude-3-5-haiku-20241022","max_tokens":10,"messages":[{"role":"user","content":"test"}]}'
-```
 
 ### Files Going to Wrong Folder
 
@@ -568,13 +406,15 @@ inbox:
 
 **Symptom:** Error saving capture, file already exists
 
-**Cause:** Using title-only pattern with very similar captures
+**Cause:** Using overly simplified patterns without enough granularity
 
 **Solutions:**
 ```yaml
-# Add timestamp to prevent conflicts
-file_pattern: "{year}-{month}-{day}_{title}.md"  # Date + title
-# file_pattern: "{title}_{hour}-{minute}.md"     # Title + time
+# Add seconds to timestamp for uniqueness
+file_pattern: "{year}-{month}-{day}_{hour}-{minute}-{second}_{source}.md"
+
+# Or use ISO week with time
+file_pattern: "{iso_year}-W{iso_week}_{hour}-{minute}-{second}_{source}.md"
 ```
 
 ### Configuration Not Reloading
@@ -601,31 +441,17 @@ docker-compose restart primeai
 
 ### Multiple Patterns Based on Source
 
-While `.prime.yaml` doesn't support conditional patterns directly, you can work around this:
+While `.prime.yaml` doesn't support conditional patterns directly, you can use the source placeholder to differentiate:
 
-**Approach 1: Use source in filename**
+**Approach: Use source in filename**
 ```yaml
 inbox:
-  file_pattern: "{source}_{title}.md"
+  file_pattern: "{source}_{year}-{month}-{day}_{hour}-{minute}.md"
 ```
-Result: `iphone_meeting-notes.md`, `mac_code-review.md`
+Result: `iphone_2026-01-02_14-30.md`, `mac_2026-01-02_16-45.md`
 
-**Approach 2: Different workflows per device**
-Configure your capture apps to use different endpoints or include metadata that helps you identify later.
-
-### Dynamic Title Length
-
-Titles are automatically truncated to 50 characters, but you can influence length:
-
-**Short titles:** Captures with clear, simple content naturally get shorter titles
-```
-"Buy milk" → "buy-milk"
-```
-
-**Long titles:** Complex captures get longer titles (up to 50 chars)
-```
-"Meeting notes about the Q1 planning..." → "q1-planning-meeting-notes-discussion"
-```
+**Alternative: Different workflows per device**
+Configure your capture apps to use different vault folders or include metadata that helps you identify later.
 
 ### Custom Date Formats
 
@@ -641,8 +467,8 @@ file_pattern: "{month}-{day}-{year}_{source}.md"
 # Result: 01-02-2026_iphone.md
 
 # European date format
-file_pattern: "{day}.{month}.{year}_{title}.md"
-# Result: 02.01.2026_meeting-notes.md
+file_pattern: "{day}.{month}.{year}_{hour}-{minute}_{source}.md"
+# Result: 02.01.2026_14-30_iphone.md
 
 # Compact format
 file_pattern: "{year}{month}{day}_{hour}{minute}_{source}.md"
@@ -655,25 +481,25 @@ file_pattern: "{year}{month}{day}_{hour}{minute}_{source}.md"
 ```yaml
 inbox:
   weekly_subfolders: true
-  file_pattern: "{year}-{month}-{day}_{title}.md"
+  file_pattern: "{year}-{month}-{day}_{hour}-{minute}_{source}.md"
 ```
-Result: `Inbox/2026-W01/2026-01-02_meeting.md`
+Result: `Inbox/2026-W01/2026-01-02_14-30_iphone.md`
 
 **Daily (alternative):**
 ```yaml
 inbox:
   weekly_subfolders: false
-  file_pattern: "{year}-{month}-{day}/{title}.md"  # Note: pattern creates subfolders
+  file_pattern: "{year}-{month}-{day}/{hour}-{minute}_{source}.md"  # Note: pattern creates subfolders
 ```
-Result: `Inbox/2026-01-02/meeting.md`
+Result: `Inbox/2026-01-02/14-30_iphone.md`
 
 **Monthly:**
 ```yaml
 inbox:
   weekly_subfolders: false
-  file_pattern: "{year}-{month}/{day}_{title}.md"
+  file_pattern: "{year}-{month}/{day}_{hour}-{minute}_{source}.md"
 ```
-Result: `Inbox/2026-01/02_meeting.md`
+Result: `Inbox/2026-01/02_14-30_iphone.md`
 
 ---
 

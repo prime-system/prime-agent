@@ -56,35 +56,6 @@ def test_get_capture_file_different_sources(temp_vault):
     assert iphone_file.parent == ipad_file.parent == mac_file.parent
 
 
-def test_get_capture_file_with_title(temp_vault):
-    """Capture file can include AI-generated title when pattern includes {title}."""
-    # Create .prime directory and config with {title} in the pattern
-    prime_dir = temp_vault / ".prime"
-    prime_dir.mkdir(parents=True, exist_ok=True)
-    config_file = prime_dir / "settings.yaml"
-    with open(config_file, "w") as f:
-        f.write("inbox:\n  file_pattern: '{year}-{month}-{day}_{title}.md'\n")
-
-    service = VaultService(str(temp_vault))
-
-    dt = datetime(2025, 12, 21, 14, 30, 0)
-    title = "meeting-notes-with-team"
-
-    file_path = service.get_capture_file(dt, "iphone", title=title)
-
-    # Should use title in filename (still in weekly subfolder by default)
-    assert file_path.name == "2025-12-21_meeting-notes-with-team.md"
-    assert file_path.parent.name == "2025-W51"
-
-
-def test_needs_title_generation(temp_vault):
-    """Check if file pattern requires title generation."""
-    service = VaultService(str(temp_vault))
-
-    # Default pattern doesn't have {title}
-    assert not service.needs_title_generation()
-
-
 def test_get_relative_path(temp_vault):
     """Relative path calculation is correct."""
     service = VaultService(str(temp_vault))

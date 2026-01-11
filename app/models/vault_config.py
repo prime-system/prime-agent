@@ -24,8 +24,7 @@ class InboxConfig(BaseModel):
             "Available placeholders: "
             "{year}, {month}, {day}, {hour}, {minute}, {second}, "
             "{source} (iphone/ipad/mac), "
-            "{iso_year}, {iso_week} (ISO week number), "
-            "{title} (AI-generated title using Claude Haiku)"
+            "{iso_year}, {iso_week} (ISO week number)"
         ),
     )
 

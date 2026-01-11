@@ -136,49 +136,6 @@ class TestVaultServiceWithConfig:
         file_path = service.get_capture_file(dt, "mac")
         assert file_path.name == "capture_2025-W51_mac.md"
 
-    def test_get_capture_file_with_title_pattern(self, vault_with_config):
-        """File pattern with {title} placeholder."""
-        vault = vault_with_config(
-            {
-                "inbox": {
-                    "file_pattern": "{title}.md",
-                }
-            }
-        )
-        service = VaultService(str(vault))
-        dt = datetime(2025, 12, 21, 14, 30, 45)
-        title = "meeting-notes"
-
-        file_path = service.get_capture_file(dt, "iphone", title=title)
-
-        assert file_path.name == "meeting-notes.md"
-
-    def test_needs_title_generation_with_title_pattern(self, vault_with_config):
-        """Detects when file pattern requires title generation."""
-        vault = vault_with_config(
-            {
-                "inbox": {
-                    "file_pattern": "{title}.md",
-                }
-            }
-        )
-        service = VaultService(str(vault))
-
-        assert service.needs_title_generation() is True
-
-    def test_needs_title_generation_without_title_pattern(self, vault_with_config):
-        """Detects when file pattern doesn't require title generation."""
-        vault = vault_with_config(
-            {
-                "inbox": {
-                    "file_pattern": "{year}-{month}-{day}.md",
-                }
-            }
-        )
-        service = VaultService(str(vault))
-
-        assert service.needs_title_generation() is False
-
     def test_reload_vault_config(self, vault_with_config):
         """Vault config can be reloaded."""
         vault = vault_with_config({"inbox": {"folder": "Inbox"}})

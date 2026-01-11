@@ -805,7 +805,6 @@ PrimeAgent/
 │   │   ├── vault.py         # Vault management
 │   │   ├── git.py           # Git operations
 │   │   ├── inbox.py         # Inbox operations
-│   │   ├── title_generator.py  # AI title generation
 │   │   └── ...
 │   ├── prompts/             # Agent prompts
 │   │   └── processCapture.md
@@ -876,25 +875,9 @@ inbox:
 
 **Result:** `07-Inbox/2026-W01/2026-01-04_21-30-45_iphone.md`
 
-### AI-Generated Titles
-
-Use `{title}` in your pattern for smart filenames:
-
-```yaml
-file_pattern: "{title}.md"
-# or
-file_pattern: "{year}-{month}-{day}_{title}.md"
-```
-
-**Example:**
-- Capture: "Meeting with dev team about auth system"
-- Filename: `meeting-with-dev-team.md` or `2026-01-04_meeting-with-dev-team.md`
-
-Adds ~100-150ms per capture using Claude Haiku.
-
 ### Available Placeholders
 
-`{year}`, `{month}`, `{day}`, `{hour}`, `{minute}`, `{second}`, `{source}`, `{iso_year}`, `{iso_week}`, `{title}`
+`{year}`, `{month}`, `{day}`, `{hour}`, `{minute}`, `{second}`, `{source}`, `{iso_year}`, `{iso_week}`
 
 ### Full Documentation
 

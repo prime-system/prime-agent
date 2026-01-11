@@ -8,7 +8,6 @@ from app.models.capture import CaptureRequest, CaptureResponse
 from app.services.background_tasks import safe_background_task
 from app.services.git import GitService
 from app.services.inbox import InboxService
-from app.services.title_generator import TitleGenerator
 from app.services.vault import VaultService
 from app.utils.error_handling import format_exception_for_response
 
@@ -30,11 +29,10 @@ async def capture(
 
     Flow:
     1. Generate dump_id from captured_at + source
-    2. Generate title if needed (using Claude Haiku)
-    3. Determine inbox file path based on vault config
-    4. Write capture file with frontmatter (creates directories as needed)
-    5. Return response immediately
-    6. Commit and push to git in background (errors ignored)
+    2. Determine inbox file path based on vault config
+    3. Write capture file with frontmatter (creates directories as needed)
+    4. Return response immediately
+    5. Commit and push to git in background (errors ignored)
 
     Note: Processing is triggered manually via the /api/v1/processing/trigger endpoint.
     This ensures the capture endpoint returns instantly without any processing overhead.
@@ -49,32 +47,7 @@ async def capture(
         },
     )
 
-    # Generate title if the file pattern requires it
-    title = None
-    if vault_service.needs_title_generation():
-        try:
-            title_generator = TitleGenerator()
-            title = await title_generator.generate_title(request.text)
-            logger.info(
-                "Generated title for capture",
-                extra={
-                    "dump_id": dump_id,
-                    "title": title,
-                },
-            )
-        except Exception as e:
-            logger.warning(
-                "Title generation failed for capture",
-                extra={
-                    "dump_id": dump_id,
-                    "error": str(e),
-                },
-            )
-            # Fallback is handled in title_generator
-
-    inbox_file = vault_service.get_capture_file(
-        request.captured_at, request.source.value, title=title
-    )
+    inbox_file = vault_service.get_capture_file(request.captured_at, request.source.value)
     relative_path = vault_service.get_relative_path(inbox_file)
 
     try:

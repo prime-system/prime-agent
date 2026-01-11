@@ -27,7 +27,7 @@ def test_vault_service_loads_vault_config(temp_vault_dir):
         "inbox": {
             "folder": "Inbox",
             "weekly_subfolders": True,
-            "file_pattern": "{year}-{month}-{day}_{title}.md",
+            "file_pattern": "{year}-{month}-{day}_{hour}-{minute}_{source}.md",
         }
     }
     with open(prime_dir / "settings.yaml", "w") as f:
@@ -38,7 +38,7 @@ def test_vault_service_loads_vault_config(temp_vault_dir):
 
     assert vault_config.inbox.folder == "Inbox"
     assert vault_config.inbox.weekly_subfolders is True
-    assert vault_config.inbox.file_pattern == "{year}-{month}-{day}_{title}.md"
+    assert vault_config.inbox.file_pattern == "{year}-{month}-{day}_{hour}-{minute}_{source}.md"
 
 
 def test_vault_service_uses_defaults_if_no_config(temp_vault_dir):
@@ -60,7 +60,7 @@ def test_vault_service_detects_vault_config_changes(temp_vault_dir):
         "inbox": {
             "folder": "Inbox",
             "weekly_subfolders": True,
-            "file_pattern": "{year}-{month}-{day}_{title}.md",
+            "file_pattern": "{year}-{month}-{day}_{hour}-{minute}_{source}.md",
         }
     }
     with open(prime_dir / "settings.yaml", "w") as f:
@@ -78,7 +78,7 @@ def test_vault_service_detects_vault_config_changes(temp_vault_dir):
         "inbox": {
             "folder": "MyInbox",
             "weekly_subfolders": False,
-            "file_pattern": "{source}-{title}.md",
+            "file_pattern": "{source}_{iso_year}-W{iso_week}.md",
         }
     }
     with open(prime_dir / "settings.yaml", "w") as f:
@@ -88,7 +88,7 @@ def test_vault_service_detects_vault_config_changes(temp_vault_dir):
     vault_config2 = service.vault_config
     assert vault_config2.inbox.folder == "MyInbox"
     assert vault_config2.inbox.weekly_subfolders is False
-    assert vault_config2.inbox.file_pattern == "{source}-{title}.md"
+    assert vault_config2.inbox.file_pattern == "{source}_{iso_year}-W{iso_week}.md"
 
 
 def test_vault_service_force_reload(temp_vault_dir):

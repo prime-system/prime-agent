@@ -119,7 +119,7 @@ class VaultService:
         """Return path to Logs folder (configurable via .prime/settings.yaml)."""
         return self.vault_path / self.vault_config.logs.folder
 
-    def get_capture_file(self, dt: datetime, source: str, title: str | None = None) -> Path:
+    def get_capture_file(self, dt: datetime, source: str) -> Path:
         """
         Return path for a capture file.
 
@@ -129,12 +129,10 @@ class VaultService:
         Example paths:
         - Without subfolders: Inbox/2026-01-02_12-00-00_iphone.md
         - With subfolders: 07-Inbox/2026-W01/2026-01-02_12-00-00_iphone.md
-        - With title: 07-Inbox/2026-W01/meeting-notes-with-team.md
 
         Args:
             dt: Timestamp of the capture
             source: Source device (iphone, ipad, mac)
-            title: Optional generated title for the filename
         """
         config = self.vault_config.inbox
         inbox = self.inbox_path()
@@ -158,17 +156,9 @@ class VaultService:
             "iso_week": f"{iso_cal.week:02d}",
         }
 
-        # Add title if provided
-        if title:
-            format_params["title"] = title
-
         filename = config.file_pattern.format(**format_params)
 
         return inbox / filename
-
-    def needs_title_generation(self) -> bool:
-        """Check if the file pattern requires title generation."""
-        return "{title}" in self.vault_config.inbox.file_pattern
 
     def get_relative_path(self, absolute_path: Path) -> str:
         """Return path relative to vault root."""
