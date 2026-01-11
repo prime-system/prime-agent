@@ -31,6 +31,9 @@ class AgentSessionState:
     input_queue: asyncio.Queue[str]
     message_buffer: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=100))
     last_activity: datetime = field(default_factory=lambda: datetime.now(UTC))
+    completed_at: datetime | None = None
+    last_event_type: str | None = None
+    last_terminal_event: dict[str, Any] | None = None
     connected_ws_id: str | None = None
     is_processing: bool = False
     replay_in_progress: bool = False
@@ -46,12 +49,12 @@ class AgentSessionManager:
     - Message buffering during disconnection
     - 30-minute timeout for inactive sessions
     - Exclusive connections (one client at a time)
-    - Early termination when response completes with no connected client
     - Push notification when response completes without a connected client
+    - Sessions remain available for reconnect until timeout
     """
 
     TIMEOUT_SECONDS = 1800  # 30 minutes
-    GRACE_PERIOD_SECONDS = 5  # After completion, wait before termination
+    GRACE_PERIOD_SECONDS = 5  # After completion, wait before notification
 
     def __init__(
         self,
@@ -77,6 +80,12 @@ class AgentSessionManager:
             pending_id = f"pending_{uuid4().hex}"
             if pending_id not in self.sessions:
                 return pending_id
+
+    def has_session(self, session_id: str) -> bool:
+        """Check if an agent session is currently held in memory."""
+        if not session_id:
+            return False
+        return session_id in self.sessions
 
     async def get_or_create_session(self, session_id: str | None) -> AgentSessionState:
         """
@@ -158,6 +167,14 @@ class AgentSessionManager:
             # Drain and return buffered messages
             buffered = list(state.message_buffer)
             state.message_buffer.clear()
+            terminal_event = (
+                state.last_terminal_event
+                if state.last_event_type in {"complete", "error"}
+                else None
+            )
+
+        if terminal_event and not any(event == terminal_event for event in buffered):
+            buffered.append(terminal_event)
 
         # Kick previous client if exists
         if previous_ws_id:
@@ -330,7 +347,7 @@ class AgentSessionManager:
         Background processing loop for a session.
 
         Processes messages from input queue, streams responses,
-        and handles buffering/early termination.
+        and handles buffering/notifications.
 
         Args:
             initial_session_id: Initial session ID ("new" or Claude UUID)
@@ -381,7 +398,7 @@ class AgentSessionManager:
                             # Send to WebSocket or buffer
                             await self._dispatch_event(state, event)
 
-                            # Check for completion and early termination
+                            # Check for completion and offline notification
                             if event.get(
                                 "type"
                             ) == "complete" and await self._handle_completion_event(state, event):
@@ -420,7 +437,15 @@ class AgentSessionManager:
 
     async def _dispatch_event(self, state: AgentSessionState, event: dict[str, Any]) -> None:
         """Send event to active WebSocket or buffer it if unavailable."""
+        event_type = event.get("type")
+        now = datetime.now(UTC)
+
         async with state.ws_lock:
+            state.last_activity = now
+            state.last_event_type = event_type
+            if event_type in {"complete", "error"}:
+                state.completed_at = now
+                state.last_terminal_event = event
             connected_ws_id = state.connected_ws_id
             replaying = state.replay_in_progress
 
@@ -446,7 +471,7 @@ class AgentSessionManager:
         state: AgentSessionState,
         event: dict[str, Any],
     ) -> bool:
-        """Handle completion events and decide whether to terminate."""
+        """Handle completion events and decide whether to notify."""
         async with state.ws_lock:
             connected = state.connected_ws_id is not None
 
@@ -454,7 +479,7 @@ class AgentSessionManager:
             return False
 
         logger.info(
-            "Response complete with no client, waiting %ds before termination",
+            "Response complete with no client, waiting %ds before notification",
             self.GRACE_PERIOD_SECONDS,
         )
         await asyncio.sleep(self.GRACE_PERIOD_SECONDS)
@@ -466,7 +491,7 @@ class AgentSessionManager:
             return False
 
         await self._send_completion_notification(state, event)
-        return True
+        return False
 
     async def _send_completion_notification(
         self,

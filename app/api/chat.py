@@ -238,6 +238,7 @@ async def websocket_endpoint(
             {"type": "complete", "status": "success", "costUsd": 0.01, "durationMs": 1200}
             {"type": "error", "error": "...", "isPermanent": true}
             {"type": "session_taken"}  # Sent when another client takes over
+            {"type": "session_status", "session_id": "uuid", "is_processing": false, ...}
 
     Args:
         websocket: WebSocket connection
@@ -249,8 +250,10 @@ async def websocket_endpoint(
     claude_session_id = None
 
     if session_id != "new" and not session_id.startswith("conn_"):
-        # Validate Claude session exists
-        if session_manager.session_exists(session_id):
+        # Validate Claude session exists on disk or in memory
+        if session_manager.session_exists(session_id) or agent_session_manager.has_session(
+            session_id
+        ):
             claude_session_id = session_id
             logger.info("Will resume Claude session %s", claude_session_id)
         else:
@@ -288,6 +291,23 @@ async def websocket_endpoint(
             connected_payload["sessionId"] = agent_session.session_id
 
         await websocket.send_json(connected_payload)
+
+        async with agent_session.ws_lock:
+            last_activity = agent_session.last_activity
+            completed_at = agent_session.completed_at
+            last_event_type = agent_session.last_event_type
+            is_processing = agent_session.is_processing
+
+        session_status_payload: dict[str, Any] = {
+            "type": WSMessageType.SESSION_STATUS.value,
+            "session_id": agent_session.session_id,
+            "is_processing": is_processing,
+            "last_event_type": last_event_type,
+            "buffered_count": len(buffered),
+            "last_activity": last_activity.isoformat() if last_activity else None,
+            "completed_at": completed_at.isoformat() if completed_at else None,
+        }
+        await websocket.send_json(session_status_payload)
 
         # Replay buffered messages
         for msg in buffered:

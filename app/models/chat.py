@@ -73,6 +73,7 @@ class WSMessageType(str, Enum):
     CONNECTED = "connected"
     SESSION_ID = "session_id"
     SESSION_TAKEN = "session_taken"
+    SESSION_STATUS = "session_status"
     TEXT = "text"
     TOOL_USE = "tool_use"
     THINKING = "thinking"
@@ -129,4 +130,24 @@ class WSOutputMessage(BaseModel):
         None,
         alias="isPermanent",
         description="Whether error is permanent (for ERROR)",
+    )
+    is_processing: bool | None = Field(
+        None,
+        description="Whether the session is currently processing (for SESSION_STATUS)",
+    )
+    last_event_type: str | None = Field(
+        None,
+        description="Last event type emitted for this session (for SESSION_STATUS)",
+    )
+    buffered_count: int | None = Field(
+        None,
+        description="Number of buffered events pending replay (for SESSION_STATUS)",
+    )
+    last_activity: str | None = Field(
+        None,
+        description="ISO timestamp of last activity (for SESSION_STATUS)",
+    )
+    completed_at: str | None = Field(
+        None,
+        description="ISO timestamp when the session completed (for SESSION_STATUS)",
     )

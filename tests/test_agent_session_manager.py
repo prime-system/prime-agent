@@ -201,6 +201,8 @@ async def test_message_buffering(
     assert len(buffered) == 2
     assert buffered[0]["type"] == "text"
     assert buffered[1]["type"] == "complete"
+    assert state.last_event_type == "complete"
+    assert state.completed_at is not None
 
     # Cleanup
     state.processing_task.cancel()
@@ -227,6 +229,39 @@ async def test_buffer_overflow(session_manager, mock_agent_service, mock_client)
     assert len(state.message_buffer) == 100
     assert state.message_buffer[0]["chunk"] == "message-50"
     assert state.message_buffer[-1]["chunk"] == "message-149"
+
+    # Cleanup
+    state.processing_task.cancel()
+    try:
+        await state.processing_task
+    except asyncio.CancelledError:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_terminal_event_retained_when_buffer_full(
+    session_manager, mock_agent_service, mock_client, mock_connection_manager
+):
+    """Ensure terminal event is replayed even if buffer is full."""
+    mock_agent_service.create_client_instance.return_value = mock_client
+
+    state = await session_manager.get_or_create_session("test-session")
+    session_manager.sessions["test-session"] = state
+
+    for i in range(100):
+        state.message_buffer.append({"type": "text", "chunk": f"message-{i}"})
+
+    terminal_event = {"type": "complete", "status": "success"}
+    async with state.ws_lock:
+        state.last_event_type = "complete"
+        state.last_terminal_event = terminal_event
+
+    buffered = await session_manager.attach_websocket(
+        "test-session", "ws-1", mock_connection_manager
+    )
+
+    assert len(buffered) == 101
+    assert buffered[-1] == terminal_event
 
     # Cleanup
     state.processing_task.cancel()
@@ -397,7 +432,7 @@ async def test_reconnect_buffer_replay(
 
 @pytest.mark.asyncio
 async def test_early_termination(session_manager, mock_agent_service, mock_client):
-    """Test termination after completion with no client."""
+    """Test completion does not terminate without a client."""
     mock_agent_service.create_client_instance.return_value = mock_client
     session_manager.GRACE_PERIOD_SECONDS = 0
 
@@ -419,8 +454,10 @@ async def test_early_termination(session_manager, mock_agent_service, mock_clien
     # Allow processing to complete
     await asyncio.sleep(0.1)
 
-    # Session should be terminated
-    assert "test-session" not in session_manager.sessions
+    # Session should remain for reconnect
+    assert "test-session" in session_manager.sessions
+    assert state.completed_at is not None
+    assert state.last_event_type == "complete"
 
 
 @pytest.mark.asyncio
@@ -454,7 +491,7 @@ async def test_completion_notification_sent_when_disconnected(
     assert kwargs["data"]["costUsd"] == 0.01
     assert kwargs["data"]["durationMs"] == 1000
 
-    assert "test-session" not in session_manager.sessions
+    assert "test-session" in session_manager.sessions
 
 
 @pytest.mark.asyncio
@@ -548,8 +585,8 @@ async def test_completion_notification_failure_does_not_raise(
     queued = await session_manager.send_user_message("test-session", "test")
     assert queued
 
-    await asyncio.wait_for(state.processing_task, timeout=1)
-    assert "test-session" not in session_manager.sessions
+    await asyncio.sleep(0.1)
+    assert "test-session" in session_manager.sessions
 
 
 @pytest.mark.asyncio
