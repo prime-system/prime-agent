@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from app.models.vault_config import InboxConfig, VaultConfig
 from app.services.container import init_container
+from app.services.command_run_manager import CommandRunManager
 from app.services.vault import VaultService
 
 
@@ -39,6 +40,7 @@ def vault_browser_client(temp_vault: Path):
         claude_session_api=MagicMock(),
         health_service=MagicMock(),
         command_service=MagicMock(),
+        command_run_manager=CommandRunManager(),
         agent_identity_service=MagicMock(),
         schedule_service=MagicMock(),
     )

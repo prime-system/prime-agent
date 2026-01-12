@@ -4,13 +4,14 @@ import os
 import tempfile
 import time
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 import yaml
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.main import app
-from app.config import get_config_manager
+from app.services.command_run_manager import CommandRunManager
 
 
 @pytest.fixture
@@ -37,35 +38,84 @@ def temp_config_file():
 
 
 @pytest.fixture
-def client(temp_config_file, monkeypatch):
+def test_app():
+    """Create a test FastAPI app with config + health routers."""
+    from app.api import config, health
+
+    app = FastAPI(title="Prime Server Test")
+    app.include_router(health.router)
+    app.include_router(config.router)
+    return app
+
+
+@pytest.fixture
+def client(temp_config_file, temp_vault, test_app, monkeypatch):
     """Create a test client with temporary config."""
+    from app.services.agent_identity import AgentIdentityService
+    from app.services.command import CommandService
+    from app.services.container import init_container
+    from app.services.health import HealthCheckService
+    from app.services.inbox import InboxService
+    from app.services.logs import LogService
+    from app.services.push_notifications import PushNotificationService
+    from app.services.relay_client import PrimePushRelayClient
+    from app.services.schedule import ScheduleService
+    from app.services.vault import VaultService
+
     monkeypatch.setenv("CONFIG_PATH", temp_config_file)
 
-    # Reinitialize config manager with temp config
-    # This is a bit tricky because the config is loaded at module import time
-    # For testing, we'd need to reload the modules
-    return TestClient(app)
+    vault_service = VaultService(str(temp_vault))
+    vault_service.ensure_structure()
+    health_service = HealthCheckService(
+        vault_service=vault_service,
+        git_service=MagicMock(),
+        version="test-version",
+    )
+    command_service = CommandService(str(vault_service.vault_path))
+    command_run_manager = CommandRunManager()
+    agent_identity_service = MagicMock(spec=AgentIdentityService)
+    agent_identity_service.get_cached_identity.return_value = "agent-123"
+
+    init_container(
+        vault_service=vault_service,
+        git_service=MagicMock(),
+        inbox_service=InboxService(),
+        agent_service=MagicMock(),
+        log_service=LogService(
+            logs_dir=vault_service.logs_path(), vault_path=vault_service.vault_path
+        ),
+        chat_session_manager=MagicMock(),
+        agent_chat_service=MagicMock(),
+        agent_session_manager=MagicMock(),
+        push_notification_service=MagicMock(spec=PushNotificationService),
+        relay_client=MagicMock(spec=PrimePushRelayClient),
+        claude_session_api=MagicMock(),
+        health_service=health_service,
+        command_service=command_service,
+        command_run_manager=command_run_manager,
+        agent_identity_service=agent_identity_service,
+        schedule_service=MagicMock(spec=ScheduleService),
+    )
+
+    with TestClient(test_app) as client:
+        yield client
 
 
-def test_health_endpoint():
+def test_health_endpoint(client):
     """Test that health endpoint is available."""
-    client = TestClient(app)
     response = client.get("/health")
     assert response.status_code == 200
     assert "status" in response.json()
 
 
-def test_config_endpoint_requires_auth():
+def test_config_endpoint_requires_auth(client):
     """Test that config endpoint requires authentication."""
-    client = TestClient(app)
     response = client.get("/api/v1/config")
     assert response.status_code == 401
 
 
-def test_config_reload_requires_auth():
+def test_config_reload_requires_auth(client):
     """Test that config reload endpoint requires authentication."""
-    client = TestClient(app)
-
     # Call without auth token
     response = client.post("/api/v1/config/reload")
     assert response.status_code == 401  # Unauthorized (no auth header)

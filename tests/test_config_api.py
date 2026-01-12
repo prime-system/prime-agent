@@ -46,6 +46,7 @@ def client(temp_vault, test_app, mock_settings, auth_headers, monkeypatch):
     from app.services.health import HealthCheckService
     from app.services.inbox import InboxService
     from app.services.command import CommandService
+    from app.services.command_run_manager import CommandRunManager
     from app.services.logs import LogService
     from app.services.push_notifications import PushNotificationService
     from app.services.relay_client import PrimePushRelayClient
@@ -58,6 +59,7 @@ def client(temp_vault, test_app, mock_settings, auth_headers, monkeypatch):
     relay_client = MagicMock(spec=PrimePushRelayClient)
     push_notification_service = MagicMock(spec=PushNotificationService)
     command_service = CommandService(str(vault_service.vault_path))
+    command_run_manager = CommandRunManager()
     agent_identity_service = MagicMock(spec=AgentIdentityService)
     agent_identity_service.get_cached_identity.return_value = "agent-123"
     schedule_service = MagicMock(spec=ScheduleService)
@@ -78,6 +80,7 @@ def client(temp_vault, test_app, mock_settings, auth_headers, monkeypatch):
         claude_session_api=MagicMock(),
         health_service=health_service,
         command_service=command_service,
+        command_run_manager=command_run_manager,
         agent_identity_service=agent_identity_service,
         schedule_service=schedule_service,
     )

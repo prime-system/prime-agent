@@ -7,10 +7,19 @@ managing the transformation of raw brain dumps into structured knowledge.
 
 import asyncio
 import logging
+from collections.abc import Callable, Coroutine
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
 
-from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
+from claude_agent_sdk import (
+    AssistantMessage,
+    ClaudeAgentOptions,
+    ResultMessage,
+    TextBlock,
+    ThinkingBlock,
+    ToolUseBlock,
+    query,
+)
 
 from app.exceptions import AgentError
 from app.utils.frontmatter import (
@@ -132,6 +141,28 @@ class AgentService:
         )
         return actual_content
 
+    async def _emit_events_for_message(
+        self,
+        message: Any,
+        event_handler: Callable[[str, dict[str, Any]], Coroutine[Any, Any, None]],
+    ) -> None:
+        """
+        Convert SDK message to events and emit via handler.
+
+        Args:
+            message: Message from SDK (AssistantMessage or ResultMessage)
+            event_handler: Async callback for events (event_type, data)
+        """
+        if isinstance(message, AssistantMessage):
+            # Process content blocks
+            for block in message.content:
+                if isinstance(block, TextBlock):
+                    await event_handler("text", {"chunk": block.text})
+                elif isinstance(block, ToolUseBlock):
+                    await event_handler("tool_use", {"name": block.name, "input": block.input})
+                elif isinstance(block, ThinkingBlock):
+                    await event_handler("thinking", {"content": block.thinking})
+
     def _build_agent_options(
         self, *, max_budget_usd: float | None = None, model: str | None = None
     ) -> ClaudeAgentOptions:
@@ -180,8 +211,23 @@ class AgentService:
         max_budget_usd: float | None = None,
         timeout_seconds: int | None = None,
         model: str | None = None,
+        event_handler: Callable[[str, dict[str, Any]], Coroutine[Any, Any, None]] | None = None,
     ) -> ProcessResult:
-        """Run an agent prompt and collect results."""
+        """
+        Run an agent prompt and collect results.
+
+        Args:
+            prompt: User prompt to execute
+            run_label: Label for logging
+            command_name: Optional command name
+            max_budget_usd: Optional budget override
+            timeout_seconds: Optional timeout override
+            model: Optional model override
+            event_handler: Optional async callback for events (event_type, data)
+
+        Returns:
+            ProcessResult with success status, cost, duration, and error
+        """
         options = self._build_agent_options(max_budget_usd=max_budget_usd, model=model)
         timeout = timeout_seconds if timeout_seconds is not None else self.timeout_seconds
 
@@ -208,6 +254,10 @@ class AgentService:
                 prompt=prompt,
                 options=options,
             ):
+                # Convert message to events if handler provided
+                if event_handler:
+                    await self._emit_events_for_message(message, event_handler)
+
                 if isinstance(message, ResultMessage):
                     cost_usd = message.total_cost_usd
                     duration_ms = message.duration_ms
@@ -225,6 +275,20 @@ class AgentService:
 
         try:
             await asyncio.wait_for(_agent_processing(), timeout=timeout)
+
+            # Emit complete event if handler provided
+            if event_handler:
+                await event_handler(
+                    "complete",
+                    {
+                        "status": "success" if error_msg is None else "error",
+                        "cost_usd": cost_usd,
+                        "duration_ms": duration_ms,
+                        "costUsd": cost_usd,  # camelCase compat
+                        "durationMs": duration_ms,  # camelCase compat
+                    },
+                )
+
             return {
                 "success": error_msg is None,
                 "cost_usd": cost_usd,
@@ -243,6 +307,17 @@ class AgentService:
                 },
             )
             duration_ms_value = duration_ms if duration_ms is not None else 0
+
+            # Emit error event if handler provided
+            if event_handler:
+                await event_handler(
+                    "error",
+                    {
+                        "error": error_msg,
+                        "isPermanent": True,
+                    },
+                )
+
             return {
                 "success": False,
                 "cost_usd": cost_usd,
@@ -269,6 +344,17 @@ class AgentService:
                 },
             )
             duration_ms_value = duration_ms if duration_ms is not None else 0
+
+            # Emit error event if handler provided
+            if event_handler:
+                await event_handler(
+                    "error",
+                    {
+                        "error": str(e),
+                        "isPermanent": True,
+                    },
+                )
+
             return {
                 "success": False,
                 "cost_usd": cost_usd,
@@ -311,8 +397,22 @@ class AgentService:
         max_budget_usd: float | None = None,
         timeout_seconds: int | None = None,
         model: str | None = None,
+        event_handler: Callable[[str, dict[str, Any]], Coroutine[Any, Any, None]] | None = None,
     ) -> ProcessResult:
-        """Run a slash command from the vault commands directory."""
+        """
+        Run a slash command from the vault commands directory.
+
+        Args:
+            command_name: Name of the command to run
+            arguments: Optional arguments string
+            max_budget_usd: Optional budget override
+            timeout_seconds: Optional timeout override
+            model: Optional model override
+            event_handler: Optional async callback for events (event_type, data)
+
+        Returns:
+            ProcessResult with success status, cost, duration, and error
+        """
         prompt = f"/{command_name}"
         if arguments:
             prompt = f"{prompt} {arguments}"
@@ -324,4 +424,5 @@ class AgentService:
             max_budget_usd=max_budget_usd,
             timeout_seconds=timeout_seconds,
             model=model,
+            event_handler=event_handler,
         )

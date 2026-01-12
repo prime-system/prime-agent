@@ -1,5 +1,7 @@
 .PHONY: help lint format type-check test test-cov coverage-report coverage-check clean install-dev pre-commit-install dev dev-build dev-down dev-logs dev-shell dev-local dev-local-build dev-local-down dev-local-logs dev-local-shell dev-local-clean update-lock release release-push
 
+UV_RUN = uv run --extra dev
+
 help:
 	@echo "Available commands:"
 	@echo ""
@@ -46,32 +48,32 @@ install-dev:
 	uv sync --all-extras
 
 pre-commit-install: install-dev
-	uv run pre-commit install
+	$(UV_RUN) pre-commit install
 
 lint:
-	uv run ruff check app tests
+	$(UV_RUN) ruff check app tests
 
 lint-fix:
-	uv run ruff check --fix app tests
+	$(UV_RUN) ruff check --fix app tests
 
 format:
-	uv run ruff format app tests
+	$(UV_RUN) ruff format app tests
 
 type-check:
-	uv run mypy app tests
+	$(UV_RUN) mypy app tests
 
 test:
-	uv run pytest
+	$(UV_RUN) pytest
 
 test-cov:
-	uv run pytest --cov=app --cov-report=xml --cov-report=html --cov-report=term --cov-fail-under=70
+	$(UV_RUN) pytest --cov=app --cov-report=xml --cov-report=html --cov-report=term --cov-fail-under=70
 
 coverage-report:
-	uv run pytest --cov=app --cov-report=html
+	$(UV_RUN) pytest --cov=app --cov-report=html
 	@echo "Coverage report generated in htmlcov/index.html"
 
 coverage-check:
-	uv run pytest --cov=app --cov-report=term --cov-fail-under=70
+	$(UV_RUN) pytest --cov=app --cov-report=term --cov-fail-under=70
 
 check: lint type-check test
 

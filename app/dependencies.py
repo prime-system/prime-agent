@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from app.services.agent_session_manager import AgentSessionManager
     from app.services.chat_session_manager import ChatSessionManager
     from app.services.claude_session_api import ClaudeSessionAPI
+    from app.services.command_run_manager import CommandRunManager
     from app.services.git import GitService
     from app.services.health import HealthCheckService
     from app.services.inbox import InboxService
@@ -138,3 +139,9 @@ async def get_schedule_service() -> ScheduleService:
     """Get schedule service via dependency injection."""
     container = get_container()
     return container.schedule_service
+
+
+async def get_command_run_manager() -> CommandRunManager:
+    """Get command run manager via dependency injection."""
+    container = get_container()
+    return container.command_run_manager

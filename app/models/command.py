@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -61,3 +62,48 @@ class CommandListResponse(BaseModel):
     vault_commands: int = Field(0, description="Number of vault commands")
     plugin_commands: int = Field(0, description="Number of plugin commands")
     mcp_commands: int = Field(0, description="Number of MCP commands")
+
+
+class TriggerCommandRequest(BaseModel):
+    """Request to trigger a command manually."""
+
+    arguments: str | None = Field(None, description="Optional arguments string for the command")
+
+
+class TriggerCommandResponse(BaseModel):
+    """Response after triggering a command."""
+
+    run_id: str = Field(..., description="Unique run identifier")
+    status: str = Field(..., description="Initial status (started)")
+    poll_url: str = Field(..., description="URL to poll for run status and output")
+
+
+class CommandRunEvent(BaseModel):
+    """Single event from a command run."""
+
+    event_id: int = Field(..., description="Unique event ID for polling cursor")
+    type: str = Field(..., description="Event type (text, tool_use, thinking, complete, error)")
+    # Additional fields vary by type - flattened into this model
+
+
+class CommandRunStatusResponse(BaseModel):
+    """Response for command run status and events."""
+
+    run_id: str = Field(..., description="Run identifier")
+    command_name: str = Field(..., description="Command that was executed")
+    status: str = Field(..., description="Run status (started, running, completed, error)")
+    started_at: str = Field(..., description="ISO timestamp when run started")
+    completed_at: str | None = Field(None, description="ISO timestamp when run completed")
+    cost_usd: float | None = Field(None, description="Total API cost in USD")
+    duration_ms: int | None = Field(None, description="Total duration in milliseconds")
+    error: str | None = Field(None, description="Error message if status is error")
+    events: list[dict[str, Any]] = Field(
+        default_factory=list, description="List of events since cursor"
+    )
+    next_cursor: int = Field(
+        ...,
+        description="Next event ID to use for polling (use as `after`; -1 if no events yet)",
+    )
+    dropped_before: int = Field(
+        0, description="First event ID that was dropped from buffer (0 if none)"
+    )

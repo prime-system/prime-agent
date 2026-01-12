@@ -113,6 +113,7 @@ def client(temp_vault, mock_git_service, test_app):
     from app.services.claude_session_api import ClaudeSessionAPI
     from app.services.health import HealthCheckService
     from app.services.command import CommandService
+    from app.services.command_run_manager import CommandRunManager
     from app.services.relay_client import PrimePushRelayClient
     from app.services.schedule import ScheduleService
     from app.services.push_notifications import PushNotificationService
@@ -140,6 +141,7 @@ def client(temp_vault, mock_git_service, test_app):
     relay_client = MagicMock(spec=PrimePushRelayClient)
     push_notification_service = MagicMock(spec=PushNotificationService)
     command_service = CommandService(str(vault_service.vault_path))
+    command_run_manager = CommandRunManager()
     agent_identity_service = MagicMock(spec=AgentIdentityService)
     schedule_service = MagicMock(spec=ScheduleService)
 
@@ -158,6 +160,7 @@ def client(temp_vault, mock_git_service, test_app):
         claude_session_api=claude_session_api,
         health_service=health_service,
         command_service=command_service,
+        command_run_manager=command_run_manager,
         agent_identity_service=agent_identity_service,
         schedule_service=schedule_service,
     )

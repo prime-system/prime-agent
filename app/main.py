@@ -33,6 +33,7 @@ from app.services.agent_session_manager import AgentSessionManager
 from app.services.chat_session_manager import ChatSessionManager
 from app.services.claude_session_api import ClaudeSessionAPI
 from app.services.command import CommandService
+from app.services.command_run_manager import CommandRunManager
 from app.services.container import init_container
 from app.services.git import GitService
 from app.services.health import HealthCheckService
@@ -198,6 +199,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         command_service=command_service,
     )
 
+    # Initialize command run manager
+    command_run_manager = CommandRunManager(
+        retention_minutes=60,
+        max_events_per_run=200,
+    )
+
     # Initialize service container (replaces per-module init_services calls)
     init_container(
         vault_service=vault_service,
@@ -214,6 +221,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         claude_session_api=claude_session_api,
         health_service=health_service,
         command_service=command_service,
+        command_run_manager=command_run_manager,
         agent_identity_service=agent_identity_service,
         schedule_service=schedule_service,
     )
