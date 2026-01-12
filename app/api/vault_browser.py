@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import logging
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 
-from app.dependencies import get_vault_browser_service, verify_token
+from app.dependencies import get_vault_browser_service, get_vault_service, verify_token
 from app.exceptions import ValidationError, VaultError
 from app.models.vault_browser import FileItem, FileMetadata, FolderListingResponse, Item
+from app.models.vault_config import VaultConfig
 from app.services.vault_browser import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, VaultBrowserService
 from app.utils.error_handling import format_exception_for_response
 from app.utils.pagination import PaginationError, paginate_items
+
+if TYPE_CHECKING:
+    from app.services.vault import VaultService
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +138,14 @@ def sort_items(items: list[Item], sort_field: SortField, order: SortOrder) -> li
         return 0
 
     return sorted(items, key=size_key, reverse=reverse)
+
+
+@router.get("/settings", response_model=VaultConfig)
+async def get_vault_settings(
+    vault_service: VaultService = Depends(get_vault_service),
+) -> VaultConfig:
+    """Get vault-specific settings with defaults applied."""
+    return vault_service.vault_config
 
 
 @router.get("/folders", response_model=FolderListingResponse)

@@ -9,6 +9,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.models.vault_config import InboxConfig, VaultConfig
 from app.services.container import init_container
 from app.services.vault import VaultService
 
@@ -181,3 +182,28 @@ def test_symlink_metadata_returns_not_found(
         headers=auth_headers,
     )
     assert response.status_code == 404
+
+
+def test_vault_settings_defaults(
+    vault_browser_client: TestClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """Vault settings endpoint should return defaults when no config exists."""
+    response = vault_browser_client.get("/api/v1/vault/settings", headers=auth_headers)
+    assert response.status_code == 200
+    assert response.json() == VaultConfig().model_dump()
+
+
+def test_vault_settings_partial_config_defaults(
+    vault_browser_client: TestClient,
+    temp_vault: Path,
+    auth_headers: dict[str, str],
+) -> None:
+    """Vault settings should fill in defaults for missing fields."""
+    settings_path = temp_vault / ".prime" / "settings.yaml"
+    settings_path.write_text("inbox:\n  folder: Inbox\n", encoding="utf-8")
+
+    response = vault_browser_client.get("/api/v1/vault/settings", headers=auth_headers)
+    assert response.status_code == 200
+    expected = VaultConfig(inbox=InboxConfig(folder="Inbox")).model_dump()
+    assert response.json() == expected
