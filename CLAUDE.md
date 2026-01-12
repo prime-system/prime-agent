@@ -259,7 +259,16 @@ make update-lock
 
 # Force specific version
 uv add package-name==1.2.3
+
+# Regenerate requirements.txt for Dependabot (after updating dependencies)
+make update-requirements
 ```
+
+**Dependabot Integration:**
+- `requirements.txt` is auto-generated from `pyproject.toml` for Dependabot compatibility
+- GitHub Dependabot's `pip` ecosystem requires this file at the root
+- Regenerate after updating dependencies: `make update-requirements`
+- This file is committed to git and should be kept in sync with `pyproject.toml`
 
 **Docker Container:**
 - Uses `uv sync --frozen --no-dev` for deterministic, production-ready builds

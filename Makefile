@@ -1,4 +1,4 @@
-.PHONY: help lint format type-check test test-cov coverage-report coverage-check clean install-dev pre-commit-install dev dev-build dev-down dev-logs dev-shell dev-local dev-local-build dev-local-down dev-local-logs dev-local-shell dev-local-clean update-lock release release-push
+.PHONY: help lint format type-check test test-cov coverage-report coverage-check clean install-dev pre-commit-install dev dev-build dev-down dev-logs dev-shell dev-local dev-local-build dev-local-down dev-local-logs dev-local-shell dev-local-clean update-lock update-requirements release release-push
 
 help:
 	@echo "Available commands:"
@@ -31,6 +31,7 @@ help:
 	@echo "  make coverage-check     Check coverage meets 70%% threshold"
 	@echo "  make check              Run all checks (lint + type-check + test)"
 	@echo "  make update-lock        Update uv.lock with latest compatible versions"
+	@echo "  make update-requirements Regenerate requirements.txt from pyproject.toml (for Dependabot)"
 	@echo "  make clean              Remove cache files"
 	@echo ""
 	@echo "Local Development (without Docker):"
@@ -77,6 +78,9 @@ check: lint type-check test
 
 update-lock:
 	uv lock --upgrade
+
+update-requirements:
+	uv pip compile pyproject.toml -o requirements.txt
 
 clean:
 	rm -rf .pytest_cache .mypy_cache .ruff_cache __pycache__ .coverage htmlcov
