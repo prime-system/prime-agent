@@ -19,6 +19,7 @@ from app.api import (
     monitoring,
     processing,
     push,
+    schedule,
     vault_browser,
 )
 from app.config import settings
@@ -40,6 +41,7 @@ from app.services.lock import init_vault_lock
 from app.services.logs import LogService
 from app.services.push_notifications import PushNotificationService
 from app.services.relay_client import PrimePushRelayClient
+from app.services.schedule import ScheduleService
 from app.services.vault import VaultService
 from app.services.vault_browser import VaultBrowserService
 from app.services.worker import AgentWorker
@@ -189,6 +191,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Initialize command service
     command_service = CommandService(str(vault_service.vault_path))
 
+    # Initialize schedule service
+    schedule_service = ScheduleService(
+        vault_path=str(vault_service.vault_path),
+        agent_service=agent_service,
+        command_service=command_service,
+    )
+
     # Initialize service container (replaces per-module init_services calls)
     init_container(
         vault_service=vault_service,
@@ -206,6 +215,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         health_service=health_service,
         command_service=command_service,
         agent_identity_service=agent_identity_service,
+        schedule_service=schedule_service,
     )
 
     # Initialize agent worker
@@ -217,6 +227,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("Prime server ready (local-only mode)")
 
     logger.info("Agent worker initialized and ready")
+
+    # Start schedule loop
+    schedule_service.start()
 
     # Start background git pull task
     git_pull_task = asyncio.create_task(periodic_git_pull(git_service))
@@ -237,6 +250,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await git_pull_task
     except asyncio.CancelledError:
         pass
+
+    # Stop schedule loop
+    await schedule_service.stop()
 
 
 app = FastAPI(
@@ -281,5 +297,6 @@ app.include_router(git.router, tags=["git"])
 app.include_router(health.router)
 app.include_router(monitoring.router, tags=["monitoring"])
 app.include_router(processing.router)
+app.include_router(schedule.router, tags=["schedule"])
 app.include_router(push.router, tags=["push"])
 app.include_router(vault_browser.router, tags=["vault"])

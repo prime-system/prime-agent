@@ -114,6 +114,7 @@ def client(temp_vault, mock_git_service, test_app):
     from app.services.health import HealthCheckService
     from app.services.command import CommandService
     from app.services.relay_client import PrimePushRelayClient
+    from app.services.schedule import ScheduleService
     from app.services.push_notifications import PushNotificationService
     from app.services.agent_identity import AgentIdentityService
     from app.config import settings
@@ -140,6 +141,7 @@ def client(temp_vault, mock_git_service, test_app):
     push_notification_service = MagicMock(spec=PushNotificationService)
     command_service = CommandService(str(vault_service.vault_path))
     agent_identity_service = MagicMock(spec=AgentIdentityService)
+    schedule_service = MagicMock(spec=ScheduleService)
 
     # Initialize container with mocked services
     init_container(
@@ -157,6 +159,7 @@ def client(temp_vault, mock_git_service, test_app):
         health_service=health_service,
         command_service=command_service,
         agent_identity_service=agent_identity_service,
+        schedule_service=schedule_service,
     )
 
     with TestClient(test_app) as c:

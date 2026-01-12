@@ -49,6 +49,7 @@ def client(temp_vault, test_app, mock_settings, auth_headers, monkeypatch):
     from app.services.logs import LogService
     from app.services.push_notifications import PushNotificationService
     from app.services.relay_client import PrimePushRelayClient
+    from app.services.schedule import ScheduleService
     from app.services.vault import VaultService
 
     vault_service = VaultService(str(temp_vault))
@@ -59,6 +60,7 @@ def client(temp_vault, test_app, mock_settings, auth_headers, monkeypatch):
     command_service = CommandService(str(vault_service.vault_path))
     agent_identity_service = MagicMock(spec=AgentIdentityService)
     agent_identity_service.get_cached_identity.return_value = "agent-123"
+    schedule_service = MagicMock(spec=ScheduleService)
 
     init_container(
         vault_service=vault_service,
@@ -77,6 +79,7 @@ def client(temp_vault, test_app, mock_settings, auth_headers, monkeypatch):
         health_service=health_service,
         command_service=command_service,
         agent_identity_service=agent_identity_service,
+        schedule_service=schedule_service,
     )
 
     # Patch settings used by config endpoint

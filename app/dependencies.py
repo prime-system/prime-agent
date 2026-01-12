@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from app.services.logs import LogService
     from app.services.push_notifications import PushNotificationService
     from app.services.relay_client import PrimePushRelayClient
+    from app.services.schedule import ScheduleService
     from app.services.vault import VaultService
     from app.services.vault_browser import VaultBrowserService
 
@@ -131,3 +132,9 @@ async def get_agent_identity_service() -> AgentIdentityService:
     """Get agent identity service via dependency injection."""
     container = get_container()
     return container.agent_identity_service
+
+
+async def get_schedule_service() -> ScheduleService:
+    """Get schedule service via dependency injection."""
+    container = get_container()
+    return container.schedule_service

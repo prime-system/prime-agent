@@ -132,28 +132,10 @@ class AgentService:
         )
         return actual_content
 
-    async def process_dumps(self) -> ProcessResult:
-        """
-        Process all unprocessed dumps using Claude Agent SDK.
-
-        The agent will:
-        1. Read all unprocessed dumps from Inbox/
-        2. Transform them into structured knowledge
-        3. Write to appropriate vault folders
-        4. Mark dumps as processed
-
-        Returns:
-            Dictionary with processing results:
-            {
-                "success": bool,
-                "cost_usd": Optional[float],
-                "duration_ms": int,
-                "error": Optional[str]
-            }
-        """
-        logger.info("Starting agent processing")
-
-        # Configure agent options
+    def _build_agent_options(
+        self, *, max_budget_usd: float | None = None, model: str | None = None
+    ) -> ClaudeAgentOptions:
+        """Build ClaudeAgentOptions with optional overrides."""
         # Build environment dict for API authentication
         env_dict = {"ANTHROPIC_API_KEY": self.api_key}
         if self.base_url:
@@ -163,7 +145,9 @@ class AgentService:
         if self.prime_api_token:
             env_dict["PRIME_API_TOKEN"] = self.prime_api_token
 
-        options = ClaudeAgentOptions(
+        budget = self.max_budget_usd if max_budget_usd is None else max_budget_usd
+
+        return ClaudeAgentOptions(
             allowed_tools=[
                 "Read",
                 "Write",
@@ -183,47 +167,64 @@ class AgentService:
             setting_sources=["project"],  # Load CLAUDE.md files from project
             cwd=str(self.vault_path),
             env=env_dict,
+            max_budget_usd=budget,
+            model=model,
+        )
+
+    async def _run_prompt(
+        self,
+        prompt: str,
+        *,
+        run_label: str,
+        command_name: str | None = None,
+        max_budget_usd: float | None = None,
+        timeout_seconds: int | None = None,
+        model: str | None = None,
+    ) -> ProcessResult:
+        """Run an agent prompt and collect results."""
+        options = self._build_agent_options(max_budget_usd=max_budget_usd, model=model)
+        timeout = timeout_seconds if timeout_seconds is not None else self.timeout_seconds
+
+        logger.info(
+            "Starting agent run",
+            extra={
+                "run_label": run_label,
+                "command_name": command_name,
+                "prompt_length": len(prompt),
+                "timeout_seconds": timeout,
+            },
         )
 
         # Track results
         cost_usd: float | None = None
-        duration_ms: int = 0
+        duration_ms: int | None = None
         error_msg: str | None = None
 
         async def _agent_processing() -> None:
             """Inner async function to stream messages from agent."""
             nonlocal cost_usd, duration_ms, error_msg
 
-            # Get the prompt - either slash command or template content
-            command_prompt = self._get_process_capture_prompt()
-
-            # Stream messages from agent
             async for message in query(
-                prompt=command_prompt,
+                prompt=prompt,
                 options=options,
             ):
-                # Collect information from messages
                 if isinstance(message, ResultMessage):
-                    # Final result with cost and usage
                     cost_usd = message.total_cost_usd
                     duration_ms = message.duration_ms
 
-                    # Check if processing was successful
                     if message.is_error:
                         error_msg = "Agent processing failed"
                         logger.error(
                             "Agent returned error",
                             extra={
+                                "run_label": run_label,
+                                "command_name": command_name,
                                 "agent_message": str(message),
                             },
                         )
 
         try:
-            # Wrap agent processing with timeout
-            await asyncio.wait_for(_agent_processing(), timeout=self.timeout_seconds)
-
-            # Return processing results
-            # Note: Worker handles git commit/push after this returns
+            await asyncio.wait_for(_agent_processing(), timeout=timeout)
             return {
                 "success": error_msg is None,
                 "cost_usd": cost_usd,
@@ -232,30 +233,95 @@ class AgentService:
             }
 
         except TimeoutError:
-            error_msg = f"Agent processing timed out after {self.timeout_seconds}s"
+            error_msg = f"Agent processing timed out after {timeout}s"
             logger.error(
                 "Agent processing timed out",
                 extra={
-                    "timeout_seconds": self.timeout_seconds,
+                    "run_label": run_label,
+                    "command_name": command_name,
+                    "timeout_seconds": timeout,
                 },
             )
+            duration_ms_value = duration_ms if duration_ms is not None else 0
             return {
                 "success": False,
-                "cost_usd": None,
-                "duration_ms": 0,
+                "cost_usd": cost_usd,
+                "duration_ms": duration_ms_value,
                 "error": error_msg,
             }
+        except asyncio.CancelledError:
+            logger.info(
+                "Agent run cancelled",
+                extra={
+                    "run_label": run_label,
+                    "command_name": command_name,
+                },
+            )
+            raise
         except Exception as e:
             logger.exception(
                 "Agent processing failed with exception",
                 extra={
+                    "run_label": run_label,
+                    "command_name": command_name,
                     "error": str(e),
                     "error_type": type(e).__name__,
                 },
             )
+            duration_ms_value = duration_ms if duration_ms is not None else 0
             return {
                 "success": False,
-                "cost_usd": None,
-                "duration_ms": 0,
+                "cost_usd": cost_usd,
+                "duration_ms": duration_ms_value,
                 "error": str(e),
             }
+
+    async def process_dumps(self) -> ProcessResult:
+        """
+        Process all unprocessed dumps using Claude Agent SDK.
+
+        The agent will:
+        1. Read all unprocessed dumps from Inbox/
+        2. Transform them into structured knowledge
+        3. Write to appropriate vault folders
+        4. Mark dumps as processed
+
+        Returns:
+            Dictionary with processing results:
+            {
+                "success": bool,
+                "cost_usd": Optional[float],
+                "duration_ms": int,
+                "error": Optional[str]
+            }
+        """
+        command_prompt = self._get_process_capture_prompt()
+        command_name = "processCapture" if command_prompt.startswith("/") else None
+        return await self._run_prompt(
+            command_prompt,
+            run_label="process_dumps",
+            command_name=command_name,
+        )
+
+    async def run_command(
+        self,
+        command_name: str,
+        *,
+        arguments: str | None = None,
+        max_budget_usd: float | None = None,
+        timeout_seconds: int | None = None,
+        model: str | None = None,
+    ) -> ProcessResult:
+        """Run a slash command from the vault commands directory."""
+        prompt = f"/{command_name}"
+        if arguments:
+            prompt = f"{prompt} {arguments}"
+
+        return await self._run_prompt(
+            prompt,
+            run_label="scheduled_command",
+            command_name=command_name,
+            max_budget_usd=max_budget_usd,
+            timeout_seconds=timeout_seconds,
+            model=model,
+        )

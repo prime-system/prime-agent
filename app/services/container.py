@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from app.services.logs import LogService
     from app.services.push_notifications import PushNotificationService
     from app.services.relay_client import PrimePushRelayClient
+    from app.services.schedule import ScheduleService
     from app.services.vault import VaultService
     from app.services.vault_browser import VaultBrowserService
 
@@ -51,6 +52,7 @@ class ServiceContainer:
         health_service: HealthCheckService,
         command_service: CommandService,
         agent_identity_service: AgentIdentityService,
+        schedule_service: ScheduleService,
     ) -> None:
         """Initialize service container with all required services."""
         self.vault_service = vault_service
@@ -68,6 +70,7 @@ class ServiceContainer:
         self.health_service = health_service
         self.command_service = command_service
         self.agent_identity_service = agent_identity_service
+        self.schedule_service = schedule_service
 
 
 _container: ServiceContainer | None = None
@@ -88,6 +91,7 @@ def init_container(
     health_service: HealthCheckService,
     command_service: CommandService,
     agent_identity_service: AgentIdentityService,
+    schedule_service: ScheduleService,
     vault_browser_service: VaultBrowserService | None = None,
 ) -> None:
     """Initialize service container (called once in FastAPI lifespan).
@@ -108,6 +112,7 @@ def init_container(
         health_service: HealthCheckService for health checks
         command_service: CommandService for managing slash commands
         agent_identity_service: AgentIdentityService for persistent agent ID
+        schedule_service: ScheduleService for scheduled commands
     """
     global _container
 
@@ -132,6 +137,7 @@ def init_container(
         health_service=health_service,
         command_service=command_service,
         agent_identity_service=agent_identity_service,
+        schedule_service=schedule_service,
     )
 
 

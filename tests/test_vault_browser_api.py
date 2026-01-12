@@ -39,6 +39,7 @@ def vault_browser_client(temp_vault: Path):
         health_service=MagicMock(),
         command_service=MagicMock(),
         agent_identity_service=MagicMock(),
+        schedule_service=MagicMock(),
     )
 
     with TestClient(app) as client:

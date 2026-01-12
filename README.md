@@ -837,6 +837,7 @@ PrimeAgent organizes notes into a Zettelkasten structure:
 vault/
 ├── .prime/
 │   ├── settings.yaml        # Vault configuration (optional)
+│   ├── schedule.yaml        # Scheduled slash commands (optional)
 │   ├── inbox/              # Captured thoughts
 │   │   └── 2026-W01/       # Weekly subfolders (optional)
 │   └── logs/               # Processing run logs
@@ -897,6 +898,31 @@ inbox:
   weekly_subfolders: true
   file_pattern: "{year}-{month}-{day}_{hour}-{minute}-{second}_{source}.md"
 ```
+
+---
+
+## Schedule Configuration
+
+**Run slash commands automatically using cron schedules.**
+
+Create `.prime/schedule.yaml` in your vault root to define scheduled jobs:
+
+```yaml
+# /vault/.prime/schedule.yaml
+timezone: "Europe/Berlin"
+jobs:
+  - id: "daily-brief"
+    command: "dailyBrief"
+    cron: "0 6 * * *"
+    overlap: "queue"
+    queue_max: 1
+    timeout_seconds: 900
+    max_budget_usd: 1.0
+```
+
+Default timezone is your system timezone (falls back to `UTC` if unavailable).
+
+Full documentation: **[SCHEDULE_CONFIG.md](./SCHEDULE_CONFIG.md)**
 
 ---
 
