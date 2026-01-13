@@ -2,10 +2,26 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path  # noqa: TC003
+from string import Formatter
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
+
+_ABSOLUTE_PATH_PATTERN = re.compile(r"^[a-zA-Z]:[\\/]")
+_ALLOWED_TEMPLATE_PLACEHOLDERS = {
+    "year",
+    "month",
+    "day",
+    "hour",
+    "minute",
+    "second",
+    "source",
+    "iso_year",
+    "iso_week",
+    "week",
+}
 
 
 def _validate_relative_folder(folder: str) -> str:
@@ -35,6 +51,66 @@ def _validate_relative_folder(folder: str) -> str:
     return normalized
 
 
+def _validate_template_placeholders(template: str, field_name: str) -> None:
+    formatter = Formatter()
+    try:
+        parsed = list(formatter.parse(template))
+    except ValueError as exc:
+        msg = f"{field_name} has invalid placeholder syntax"
+        raise ValueError(msg) from exc
+
+    invalid_placeholders: set[str] = set()
+    for _, field, format_spec, conversion in parsed:
+        if field is None:
+            continue
+        if field == "":
+            msg = f"{field_name} cannot contain empty placeholders"
+            raise ValueError(msg)
+        if format_spec:
+            msg = f"{field_name} placeholders cannot include format specs"
+            raise ValueError(msg)
+        if conversion:
+            msg = f"{field_name} placeholders cannot include conversions"
+            raise ValueError(msg)
+        if field not in _ALLOWED_TEMPLATE_PLACEHOLDERS:
+            invalid_placeholders.add(field)
+
+    if invalid_placeholders:
+        invalid_list = ", ".join(sorted(invalid_placeholders))
+        msg = f"{field_name} contains unsupported placeholders: {invalid_list}"
+        raise ValueError(msg)
+
+
+def _validate_template_string(
+    template: str,
+    field_name: str,
+    allow_path_separators: bool,
+) -> str:
+    if not template or not isinstance(template, str):
+        msg = f"{field_name} must be a non-empty string"
+        raise ValueError(msg)
+
+    if "\x00" in template:
+        msg = f"{field_name} cannot contain null bytes"
+        raise ValueError(msg)
+
+    if ".." in template:
+        msg = f"{field_name} cannot contain '..'"
+        raise ValueError(msg)
+
+    if allow_path_separators:
+        if template.startswith(("/", "\\")) or _ABSOLUTE_PATH_PATTERN.match(template):
+            msg = f"{field_name} cannot be an absolute path"
+            raise ValueError(msg)
+    elif "/" in template or "\\" in template:
+        msg = f"{field_name} cannot contain path separators"
+        raise ValueError(msg)
+
+    _validate_template_placeholders(template, field_name)
+
+    return template
+
+
 class InboxConfig(BaseModel):
     """Configuration for the inbox folder and capture storage."""
 
@@ -51,7 +127,8 @@ class InboxConfig(BaseModel):
             "Available placeholders: "
             "{year}, {month}, {day}, {hour}, {minute}, {second}, "
             "{source} (iphone/ipad/mac), "
-            "{iso_year}, {iso_week} (ISO week number)"
+            "{iso_year}, {iso_week} (ISO week number), "
+            "{week} (alias for {iso_week})"
         ),
     )
 
@@ -65,26 +142,7 @@ class InboxConfig(BaseModel):
     @classmethod
     def validate_file_pattern(cls, v: str) -> str:
         """Validate file pattern to prevent path traversal in filenames."""
-        if not v or not isinstance(v, str):
-            msg = "file_pattern must be a non-empty string"
-            raise ValueError(msg)
-
-        # Check for path traversal
-        if ".." in v:
-            msg = "file_pattern cannot contain '..'"
-            raise ValueError(msg)
-
-        # Check for path separators (these should be in placeholders, not literal paths)
-        if "/" in v or "\\" in v:
-            msg = "file_pattern cannot contain path separators"
-            raise ValueError(msg)
-
-        # Check for null bytes
-        if "\x00" in v:
-            msg = "file_pattern cannot contain null bytes"
-            raise ValueError(msg)
-
-        return v
+        return _validate_template_string(v, "file_pattern", allow_path_separators=False)
 
 
 class LogsConfig(BaseModel):
@@ -102,15 +160,25 @@ class LogsConfig(BaseModel):
 
 
 class DailyConfig(BaseModel):
-    """Configuration for the Daily folder."""
+    """Configuration for the Daily folder and today's note."""
 
     folder: str = Field(default="Daily", description="Path to Daily folder relative to vault root")
+    today_note: str = Field(
+        default="{year}-{month}-{day}.md",
+        description="Filename or relative path template for today's note",
+    )
 
     @field_validator("folder")
     @classmethod
     def validate_folder(cls, v: str) -> str:
         """Validate folder path to prevent directory traversal."""
         return _validate_relative_folder(v)
+
+    @field_validator("today_note")
+    @classmethod
+    def validate_today_note(cls, v: str) -> str:
+        """Validate today note template to prevent path traversal."""
+        return _validate_template_string(v, "today_note", allow_path_separators=True)
 
 
 class VaultConfig(BaseModel):

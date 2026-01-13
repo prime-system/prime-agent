@@ -1,8 +1,8 @@
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
-from app.models.vault_config import VaultConfig, load_vault_config
+from app.models.vault_config import DailyConfig, VaultConfig, load_vault_config
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +119,34 @@ class VaultService:
         """Return path to Logs folder (configurable via .prime/settings.yaml)."""
         return self.vault_path / self.vault_config.logs.folder
 
+    def get_today_note_path(self, dt: datetime | None = None) -> Path:
+        """Return path for today's daily note."""
+        if dt is None:
+            dt = datetime.now(UTC).astimezone()
+
+        daily_config = self.vault_config.daily or DailyConfig()
+        base_path = self.vault_path / daily_config.folder
+        format_params = self._build_format_params(dt, source="daily")
+        relative_path = daily_config.today_note.format(**format_params)
+
+        return base_path / relative_path
+
+    def _build_format_params(self, dt: datetime, source: str) -> dict[str, str | int]:
+        iso_cal = dt.isocalendar()
+
+        return {
+            "year": dt.year,
+            "month": f"{dt.month:02d}",
+            "day": f"{dt.day:02d}",
+            "hour": f"{dt.hour:02d}",
+            "minute": f"{dt.minute:02d}",
+            "second": f"{dt.second:02d}",
+            "source": source,
+            "iso_year": iso_cal.year,
+            "iso_week": f"{iso_cal.week:02d}",
+            "week": f"{iso_cal.week:02d}",
+        }
+
     def get_capture_file(self, dt: datetime, source: str) -> Path:
         """
         Return path for a capture file.
@@ -144,18 +172,7 @@ class VaultService:
             inbox = inbox / subfolder
 
         # Format filename using pattern
-        format_params = {
-            "year": dt.year,
-            "month": f"{dt.month:02d}",
-            "day": f"{dt.day:02d}",
-            "hour": f"{dt.hour:02d}",
-            "minute": f"{dt.minute:02d}",
-            "second": f"{dt.second:02d}",
-            "source": source,
-            "iso_year": iso_cal.year,
-            "iso_week": f"{iso_cal.week:02d}",
-        }
-
+        format_params = self._build_format_params(dt, source=source)
         filename = config.file_pattern.format(**format_params)
 
         return inbox / filename

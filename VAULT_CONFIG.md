@@ -42,6 +42,9 @@ inbox:
 daily:
   # Folder name for Daily notes (relative to vault root; leading / or \ is optional)
   folder: "Daily"
+
+  # Filename or relative path template for today's note
+  today_note: "{year}-{month}-{day}.md"
 ```
 
 ### Inbox Folder
@@ -67,6 +70,21 @@ daily:
   # folder: "Journal/Daily"  # Nested path
   # folder: "Daily Notes"    # Custom name
 ```
+
+### Today Note Template
+
+Customize how the "today" Daily note is named (and optionally nested):
+
+```yaml
+daily:
+  today_note: "{year}-{month}-{day}.md"  # Default
+  # today_note: "{year}-{week}/{year}-{month}-{day}.md"  # Nested folder
+```
+
+Notes:
+- Must be a relative path (no leading `/` or `\`).
+- Supports the same placeholders as inbox patterns.
+- If you include `{source}`, it resolves to `daily`.
 
 ### Weekly Subfolders
 
@@ -110,6 +128,7 @@ inbox:
 | `{source}` | Device source | `iphone`, `ipad`, `mac` |
 | `{iso_year}` | ISO year | `2026` |
 | `{iso_week}` | ISO week number | `01`, `52` |
+| `{week}` | Alias for `{iso_week}` | `01`, `52` |
 
 **Pattern Examples:**
 
@@ -147,7 +166,8 @@ logs:
   folder: ".prime/logs"
 ```
 
-Daily settings are optional; if omitted, the API returns `daily: null`.
+Daily settings are optional; if omitted, the API returns `daily: null`. If `daily`
+is configured but `today_note` is omitted, it defaults to `{year}-{month}-{day}.md`.
 
 **Default path example:**
 ```

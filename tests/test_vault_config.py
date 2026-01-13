@@ -91,6 +91,7 @@ class TestVaultConfig:
         config = load_vault_config(vault)
         assert config.daily is not None
         assert config.daily.folder == "Journal/Daily"
+        assert config.daily.today_note == "{year}-{month}-{day}.md"
 
     def test_load_rooted_daily_folder(self, vault_with_config):
         """Leading slashes are treated as vault-rooted for daily folder."""
@@ -98,12 +99,28 @@ class TestVaultConfig:
         config = load_vault_config(vault)
         assert config.daily is not None
         assert config.daily.folder == "Daily"
+        assert config.daily.today_note == "{year}-{month}-{day}.md"
 
     def test_load_rooted_inbox_folder(self, vault_with_config):
         """Leading slashes are treated as vault-rooted for inbox folder."""
         vault = vault_with_config({"inbox": {"folder": "/Inbox"}})
         config = load_vault_config(vault)
         assert config.inbox.folder == "Inbox"
+
+    def test_load_custom_today_note(self, vault_with_config):
+        """Load config with custom today note template."""
+        vault = vault_with_config(
+            {
+                "daily": {
+                    "folder": "01-Daily",
+                    "today_note": "{year}-{week}/{year}-{month}-{day}.md",
+                }
+            }
+        )
+        config = load_vault_config(vault)
+        assert config.daily is not None
+        assert config.daily.folder == "01-Daily"
+        assert config.daily.today_note == "{year}-{week}/{year}-{month}-{day}.md"
 
     @pytest.mark.parametrize(
         "folder",
@@ -116,6 +133,19 @@ class TestVaultConfig:
         """Daily folder should reject unsafe paths."""
         with pytest.raises(ValidationError):
             DailyConfig(folder=folder)
+
+    @pytest.mark.parametrize(
+        "today_note",
+        [
+            "{year}-{moon}.md",
+            "/Daily/2025-01-01.md",
+            "../Daily/2025-01-01.md",
+        ],
+    )
+    def test_today_note_validation(self, today_note: str) -> None:
+        """Today note template should reject invalid placeholders or paths."""
+        with pytest.raises(ValidationError):
+            DailyConfig(today_note=today_note)
 
 
 class TestVaultServiceWithConfig:
@@ -171,6 +201,28 @@ class TestVaultServiceWithConfig:
         dt = datetime(2025, 12, 21, 14, 30, 45)
         file_path = service.get_capture_file(dt, "mac")
         assert file_path.name == "capture_2025-W51_mac.md"
+
+    def test_get_today_note_path_default(self, temp_vault):
+        """Default today note path uses Daily/ and the standard date format."""
+        service = VaultService(str(temp_vault))
+        dt = datetime(2025, 12, 21, 14, 30, 45)
+        file_path = service.get_today_note_path(dt)
+        assert file_path == temp_vault / "Daily" / "2025-12-21.md"
+
+    def test_get_today_note_path_custom(self, vault_with_config):
+        """Custom today note template supports nested subfolders."""
+        vault = vault_with_config(
+            {
+                "daily": {
+                    "folder": "01-Daily",
+                    "today_note": "{year}-{week}/{year}-{month}-{day}.md",
+                }
+            }
+        )
+        service = VaultService(str(vault))
+        dt = datetime(2025, 12, 21, 14, 30, 45)
+        file_path = service.get_today_note_path(dt)
+        assert file_path == vault / "01-Daily" / "2025-51" / "2025-12-21.md"
 
     def test_reload_vault_config(self, vault_with_config):
         """Vault config can be reloaded."""
