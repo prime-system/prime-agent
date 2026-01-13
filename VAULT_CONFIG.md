@@ -38,6 +38,10 @@ inbox:
 
   # Filename pattern for capture files
   file_pattern: "{year}-{month}-{day}_{hour}-{minute}-{second}_{source}.md"
+
+daily:
+  # Folder name for Daily notes (relative to vault root)
+  folder: "Daily"
 ```
 
 ### Inbox Folder
@@ -50,6 +54,17 @@ inbox:
   # folder: "07-Inbox"   # Numbered (Obsidian-style)
   # folder: "00-Inbox"   # Leading zeros
   # folder: "Captures"   # Any name you prefer
+```
+
+### Daily Folder
+
+Customize the folder name where Daily notes live:
+
+```yaml
+daily:
+  folder: "Daily"          # Default
+  # folder: "Journal/Daily"  # Nested path
+  # folder: "Daily Notes"    # Custom name
 ```
 
 ### Weekly Subfolders
@@ -129,6 +144,9 @@ inbox:
 
 logs:
   folder: ".prime/logs"
+
+daily:
+  folder: "Daily"
 ```
 
 **Default path example:**

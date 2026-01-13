@@ -8,6 +8,30 @@ import yaml
 from pydantic import BaseModel, Field, field_validator
 
 
+def _validate_relative_folder(folder: str) -> str:
+    """Validate folder path to prevent directory traversal."""
+    if not folder or not isinstance(folder, str):
+        msg = "folder must be a non-empty string"
+        raise ValueError(msg)
+
+    # Check for path traversal
+    if ".." in folder:
+        msg = "folder cannot contain '..'"
+        raise ValueError(msg)
+
+    # Check for absolute paths
+    if folder.startswith(("/", "\\")):
+        msg = "folder must be relative"
+        raise ValueError(msg)
+
+    # Check for null bytes
+    if "\x00" in folder:
+        msg = "folder cannot contain null bytes"
+        raise ValueError(msg)
+
+    return folder
+
+
 class InboxConfig(BaseModel):
     """Configuration for the inbox folder and capture storage."""
 
@@ -32,26 +56,7 @@ class InboxConfig(BaseModel):
     @classmethod
     def validate_folder(cls, v: str) -> str:
         """Validate folder path to prevent directory traversal."""
-        if not v or not isinstance(v, str):
-            msg = "folder must be a non-empty string"
-            raise ValueError(msg)
-
-        # Check for path traversal
-        if ".." in v:
-            msg = "folder cannot contain '..'"
-            raise ValueError(msg)
-
-        # Check for absolute paths
-        if v.startswith(("/", "\\")):
-            msg = "folder must be relative"
-            raise ValueError(msg)
-
-        # Check for null bytes
-        if "\x00" in v:
-            msg = "folder cannot contain null bytes"
-            raise ValueError(msg)
-
-        return v
+        return _validate_relative_folder(v)
 
     @field_validator("file_pattern")
     @classmethod
@@ -90,26 +95,19 @@ class LogsConfig(BaseModel):
     @classmethod
     def validate_folder(cls, v: str) -> str:
         """Validate folder path to prevent directory traversal."""
-        if not v or not isinstance(v, str):
-            msg = "folder must be a non-empty string"
-            raise ValueError(msg)
+        return _validate_relative_folder(v)
 
-        # Check for path traversal
-        if ".." in v:
-            msg = "folder cannot contain '..'"
-            raise ValueError(msg)
 
-        # Check for absolute paths
-        if v.startswith(("/", "\\")):
-            msg = "folder must be relative"
-            raise ValueError(msg)
+class DailyConfig(BaseModel):
+    """Configuration for the Daily folder."""
 
-        # Check for null bytes
-        if "\x00" in v:
-            msg = "folder cannot contain null bytes"
-            raise ValueError(msg)
+    folder: str = Field(default="Daily", description="Path to Daily folder relative to vault root")
 
-        return v
+    @field_validator("folder")
+    @classmethod
+    def validate_folder(cls, v: str) -> str:
+        """Validate folder path to prevent directory traversal."""
+        return _validate_relative_folder(v)
 
 
 class VaultConfig(BaseModel):
@@ -122,6 +120,7 @@ class VaultConfig(BaseModel):
 
     inbox: InboxConfig = Field(default_factory=InboxConfig)
     logs: LogsConfig = Field(default_factory=LogsConfig)
+    daily: DailyConfig = Field(default_factory=DailyConfig)
 
 
 def load_vault_config(vault_path: Path) -> VaultConfig:

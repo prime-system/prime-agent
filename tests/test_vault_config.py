@@ -6,8 +6,9 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
-from app.models.vault_config import InboxConfig, VaultConfig, load_vault_config
+from app.models.vault_config import DailyConfig, InboxConfig, VaultConfig, load_vault_config
 from app.services.vault import VaultService
 
 
@@ -35,6 +36,7 @@ class TestVaultConfig:
         assert config.inbox.folder == ".prime/inbox"
         assert config.inbox.weekly_subfolders is True
         assert config.logs.folder == ".prime/logs"
+        assert config.daily.folder == "Daily"
 
     def test_load_missing_config(self, temp_vault):
         """Missing .prime/settings.yaml returns default config."""
@@ -42,6 +44,7 @@ class TestVaultConfig:
         assert config.inbox.folder == ".prime/inbox"
         assert config.inbox.weekly_subfolders is True
         assert config.logs.folder == ".prime/logs"
+        assert config.daily.folder == "Daily"
 
     def test_load_empty_config(self, temp_vault):
         """Empty .prime/settings.yaml returns default config."""
@@ -52,6 +55,7 @@ class TestVaultConfig:
         assert config.inbox.folder == ".prime/inbox"
         assert config.inbox.weekly_subfolders is True
         assert config.logs.folder == ".prime/logs"
+        assert config.daily.folder == "Daily"
 
     def test_load_custom_config(self, vault_with_config):
         """Load custom config with folder and subfolders."""
@@ -80,6 +84,25 @@ class TestVaultConfig:
         assert (
             config.inbox.file_pattern == "{year}-{month}-{day}_{hour}-{minute}-{second}_{source}.md"
         )
+
+    def test_load_custom_daily_folder(self, vault_with_config):
+        """Load config with custom daily folder."""
+        vault = vault_with_config({"daily": {"folder": "Journal/Daily"}})
+        config = load_vault_config(vault)
+        assert config.daily.folder == "Journal/Daily"
+
+    @pytest.mark.parametrize(
+        "folder",
+        [
+            "/Daily",
+            "../Daily",
+            "Daily\x00",
+        ],
+    )
+    def test_daily_folder_validation(self, folder: str) -> None:
+        """Daily folder should reject unsafe paths."""
+        with pytest.raises(ValidationError):
+            DailyConfig(folder=folder)
 
 
 class TestVaultServiceWithConfig:
