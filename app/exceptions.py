@@ -160,3 +160,11 @@ class TitleGenerationError(PrimeAgentError):
             }
         )
     """
+
+
+class CommandRunPostError(PrimeAgentError):
+    """
+    Post-run sync failed.
+
+    Raised when git or log operations after a command run encounter errors.
+    """

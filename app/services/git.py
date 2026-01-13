@@ -271,6 +271,29 @@ class GitService:
             msg = f"Commit failed: {e}"
             raise GitError(msg, context=context) from e
 
+    def get_head_commit_hash(self) -> str | None:
+        """
+        Return the current HEAD commit hash if available.
+
+        Returns:
+            Commit hash string or None if unavailable
+        """
+        if not self.enabled or self._repo is None:
+            return None
+
+        try:
+            return self._repo.head.commit.hexsha
+        except (AttributeError, ValueError, git.GitCommandError) as e:
+            logger.warning(
+                "Failed to read head commit hash",
+                extra={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "vault_path": str(self.vault_path),
+                },
+            )
+            return None
+
     def push(self) -> None:
         """
         Push local commits to remote (if Git is enabled).

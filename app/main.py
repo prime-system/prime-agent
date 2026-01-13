@@ -195,6 +195,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         vault_path=str(vault_service.vault_path),
         agent_service=agent_service,
         command_service=command_service,
+        git_service=git_service,
+        log_service=log_service,
+        vault_service=vault_service,
     )
 
     # Initialize command run manager

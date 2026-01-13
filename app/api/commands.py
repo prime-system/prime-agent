@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
 import re
 from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
-from app.dependencies import verify_token
+from app.dependencies import get_git_service, get_log_service, get_vault_service, verify_token
 from app.exceptions import VaultError
 from app.models.command import (
     CommandDetail,
@@ -18,12 +19,17 @@ from app.models.command import (
     TriggerCommandRequest,
     TriggerCommandResponse,
 )
+from app.services.background_tasks import safe_background_task
 from app.services.command_run_manager import RunStatus
+from app.services.command_run_post import sync_command_run
 
 if TYPE_CHECKING:
-    from app.services.agent import AgentService
+    from app.services.agent import AgentService, ProcessResult
     from app.services.command import CommandService
     from app.services.command_run_manager import CommandRunManager
+    from app.services.git import GitService
+    from app.services.logs import LogService
+    from app.services.vault import VaultService
 
 logger = logging.getLogger(__name__)
 
@@ -217,6 +223,9 @@ async def trigger_command(
     command_service: CommandService = Depends(get_command_service),
     agent_service: AgentService = Depends(get_agent_service),
     run_manager: CommandRunManager = Depends(get_command_run_manager),
+    git_service: GitService = Depends(get_git_service),
+    log_service: LogService = Depends(get_log_service),
+    vault_service: VaultService = Depends(get_vault_service),
 ) -> TriggerCommandResponse:
     """
     Manually trigger a slash command and return a run ID for polling.
@@ -266,6 +275,9 @@ async def trigger_command(
 
     # Create background task to execute command
     async def execute_command() -> None:
+        result: ProcessResult | None = None
+        final_status = RunStatus.ERROR.value
+        error_message: str | None = None
         try:
             await run_manager.update_status(run_id, RunStatus.RUNNING)
 
@@ -274,9 +286,13 @@ async def trigger_command(
                 arguments=request.arguments,
                 event_handler=event_handler,
             )
+            if result is None:
+                message = "Command run returned no result"
+                raise RuntimeError(message)
 
             # Update final status
             if result["success"]:
+                final_status = RunStatus.COMPLETED.value
                 await run_manager.update_status(
                     run_id,
                     RunStatus.COMPLETED,
@@ -284,6 +300,8 @@ async def trigger_command(
                     duration_ms=result["duration_ms"],
                 )
             else:
+                final_status = RunStatus.ERROR.value
+                error_message = result["error"]
                 await run_manager.update_status(
                     run_id,
                     RunStatus.ERROR,
@@ -293,6 +311,7 @@ async def trigger_command(
                 )
 
         except Exception as e:
+            error_message = str(e)
             logger.exception(
                 "Command execution failed",
                 extra={
@@ -306,6 +325,23 @@ async def trigger_command(
                 RunStatus.ERROR,
                 error=str(e),
             )
+        finally:
+            post_run_task = functools.partial(
+                sync_command_run,
+                command_name=command_name,
+                run_id=run_id,
+                status=final_status,
+                scheduled=False,
+                duration_ms=result["duration_ms"] if result else None,
+                duration_seconds=None,
+                cost_usd=result["cost_usd"] if result else None,
+                error=error_message,
+                git_service=git_service,
+                log_service=log_service,
+                vault_service=vault_service,
+            )
+            task_name = f"command_post_run:{command_name}:{run_id}"
+            asyncio.create_task(safe_background_task(task_name, post_run_task))
 
     # Start background task
     task = asyncio.create_task(execute_command())

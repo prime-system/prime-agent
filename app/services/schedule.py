@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -14,6 +15,8 @@ from croniter import croniter
 
 from app.models.schedule import ScheduleJobStatus, ScheduleStatusResponse
 from app.models.schedule_config import ScheduleConfig, ScheduleJobConfig, load_schedule_config
+from app.services.background_tasks import safe_background_task
+from app.services.command_run_post import sync_command_run
 from app.services.lock import get_vault_lock
 
 logger = logging.getLogger(__name__)
@@ -21,6 +24,9 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from app.services.agent import AgentService, ProcessResult
     from app.services.command import CommandService
+    from app.services.git import GitService
+    from app.services.logs import LogService
+    from app.services.vault import VaultService
 
 
 @dataclass
@@ -54,12 +60,18 @@ class ScheduleService:
         command_service: CommandService,
         *,
         tick_seconds: int = 30,
+        git_service: GitService | None = None,
+        log_service: LogService | None = None,
+        vault_service: VaultService | None = None,
     ) -> None:
         self._vault_path = Path(vault_path)
         self._config_path = self._vault_path / ".prime" / "schedule.yaml"
         self._agent_service = agent_service
         self._command_service = command_service
         self._tick_seconds = tick_seconds
+        self._git_service = git_service
+        self._log_service = log_service
+        self._vault_service = vault_service
 
         self._timezone = ZoneInfo("UTC")
         self._config: ScheduleConfig = ScheduleConfig()
@@ -392,6 +404,16 @@ class ScheduleService:
                 if status != "success":
                     state.total_failures += 1
 
+            duration_seconds = (end_time - start_time).total_seconds()
+            self._schedule_post_run_sync(
+                command_name=state.config.command,
+                status=status,
+                duration_ms=result.get("duration_ms") if result else None,
+                duration_seconds=duration_seconds,
+                cost_usd=result.get("cost_usd") if result else None,
+                error=error_msg,
+            )
+
             await self._maybe_run_queued(state)
 
     async def _execute_command(self, state: ScheduleJobState) -> ProcessResult:
@@ -475,3 +497,33 @@ class ScheduleService:
 
     def _now(self) -> datetime:
         return datetime.now(self._timezone)
+
+    def _schedule_post_run_sync(
+        self,
+        *,
+        command_name: str,
+        status: str,
+        duration_ms: int | None,
+        duration_seconds: float | None,
+        cost_usd: float | None,
+        error: str | None,
+    ) -> None:
+        if self._git_service is None or self._log_service is None or self._vault_service is None:
+            return
+
+        post_run_task = functools.partial(
+            sync_command_run,
+            command_name=command_name,
+            run_id=None,
+            status=status,
+            scheduled=True,
+            duration_ms=duration_ms,
+            duration_seconds=duration_seconds,
+            cost_usd=cost_usd,
+            error=error,
+            git_service=self._git_service,
+            log_service=self._log_service,
+            vault_service=self._vault_service,
+        )
+        task_name = f"command_post_run:{command_name}"
+        asyncio.create_task(safe_background_task(task_name, post_run_task))

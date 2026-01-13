@@ -26,6 +26,8 @@ from app.services.agent import AgentService, ProcessResult
 from app.services.command import CommandService
 from app.services.command_run_manager import CommandRunManager, RunStatus
 from app.services.container import ServiceContainer
+from app.services.logs import LogService
+from app.services.vault import VaultService
 
 
 @pytest.fixture
@@ -78,12 +80,21 @@ def mock_container(
     mock_command_service: CommandService,
     mock_agent_service: AsyncMock,
     command_run_manager: CommandRunManager,
+    temp_vault: Path,
 ) -> ServiceContainer:
     """Create a mock container with all required services."""
     container = MagicMock(spec=ServiceContainer)
     container.command_service = mock_command_service
     container.agent_service = mock_agent_service
     container.command_run_manager = command_run_manager
+    vault_service = VaultService(str(temp_vault))
+    vault_service.ensure_structure()
+    container.vault_service = vault_service
+    container.log_service = LogService(
+        logs_dir=vault_service.logs_path(), vault_path=vault_service.vault_path
+    )
+    container.git_service = MagicMock()
+    container.git_service.enabled = False
     return container
 
 
