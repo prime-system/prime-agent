@@ -145,10 +145,9 @@ inbox:
 
 logs:
   folder: ".prime/logs"
-
-daily:
-  folder: "Daily"
 ```
+
+Daily settings are optional; if omitted, the API returns `daily: null`.
 
 **Default path example:**
 ```

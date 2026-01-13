@@ -123,7 +123,7 @@ class VaultConfig(BaseModel):
 
     inbox: InboxConfig = Field(default_factory=InboxConfig)
     logs: LogsConfig = Field(default_factory=LogsConfig)
-    daily: DailyConfig = Field(default_factory=DailyConfig)
+    daily: DailyConfig | None = Field(default=None)
 
 
 def load_vault_config(vault_path: Path) -> VaultConfig:

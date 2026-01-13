@@ -36,7 +36,7 @@ class TestVaultConfig:
         assert config.inbox.folder == ".prime/inbox"
         assert config.inbox.weekly_subfolders is True
         assert config.logs.folder == ".prime/logs"
-        assert config.daily.folder == "Daily"
+        assert config.daily is None
 
     def test_load_missing_config(self, temp_vault):
         """Missing .prime/settings.yaml returns default config."""
@@ -44,7 +44,7 @@ class TestVaultConfig:
         assert config.inbox.folder == ".prime/inbox"
         assert config.inbox.weekly_subfolders is True
         assert config.logs.folder == ".prime/logs"
-        assert config.daily.folder == "Daily"
+        assert config.daily is None
 
     def test_load_empty_config(self, temp_vault):
         """Empty .prime/settings.yaml returns default config."""
@@ -55,7 +55,7 @@ class TestVaultConfig:
         assert config.inbox.folder == ".prime/inbox"
         assert config.inbox.weekly_subfolders is True
         assert config.logs.folder == ".prime/logs"
-        assert config.daily.folder == "Daily"
+        assert config.daily is None
 
     def test_load_custom_config(self, vault_with_config):
         """Load custom config with folder and subfolders."""
@@ -89,12 +89,14 @@ class TestVaultConfig:
         """Load config with custom daily folder."""
         vault = vault_with_config({"daily": {"folder": "Journal/Daily"}})
         config = load_vault_config(vault)
+        assert config.daily is not None
         assert config.daily.folder == "Journal/Daily"
 
     def test_load_rooted_daily_folder(self, vault_with_config):
         """Leading slashes are treated as vault-rooted for daily folder."""
         vault = vault_with_config({"daily": {"folder": "/Daily"}})
         config = load_vault_config(vault)
+        assert config.daily is not None
         assert config.daily.folder == "Daily"
 
     def test_load_rooted_inbox_folder(self, vault_with_config):
