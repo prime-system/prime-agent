@@ -40,13 +40,14 @@ inbox:
   file_pattern: "{year}-{month}-{day}_{hour}-{minute}-{second}_{source}.md"
 
 daily:
-  # Folder name for Daily notes (relative to vault root)
+  # Folder name for Daily notes (relative to vault root; leading / or \ is optional)
   folder: "Daily"
 ```
 
 ### Inbox Folder
 
 Customize the folder name where captures are stored:
+Leading `/` or `\\` is allowed and treated as vault-rooted (e.g., `/Inbox` == `Inbox`).
 
 ```yaml
 inbox:

@@ -157,13 +157,16 @@ class TestValidateFolderName:
         with pytest.raises(PathValidationError, match="cannot contain '..'"):
             validate_folder_name("inbox/../../sensitive", temp_vault)
 
-    def test_blocks_absolute_paths(self, temp_vault: Path) -> None:
-        """Verify absolute paths are blocked."""
-        with pytest.raises(PathValidationError, match="must be relative"):
-            validate_folder_name("/etc/passwd", temp_vault)
+    def test_accepts_rooted_folder_paths(self, temp_vault: Path) -> None:
+        """Verify leading separators are treated as vault-rooted."""
+        validated = validate_folder_name("/Daily", temp_vault)
+        assert validated == (temp_vault / "Daily").resolve()
 
-        with pytest.raises(PathValidationError, match="must be relative"):
-            validate_folder_name("\\etc\\passwd", temp_vault)
+        validated = validate_folder_name("\\Daily", temp_vault)
+        assert validated == (temp_vault / "Daily").resolve()
+
+        validated = validate_folder_name("/.prime/inbox", temp_vault)
+        assert validated == (temp_vault / ".prime" / "inbox").resolve()
 
     def test_blocks_null_bytes_in_folder_name(self, temp_vault: Path) -> None:
         """Verify null bytes are blocked."""

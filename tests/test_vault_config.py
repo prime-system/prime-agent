@@ -91,10 +91,21 @@ class TestVaultConfig:
         config = load_vault_config(vault)
         assert config.daily.folder == "Journal/Daily"
 
+    def test_load_rooted_daily_folder(self, vault_with_config):
+        """Leading slashes are treated as vault-rooted for daily folder."""
+        vault = vault_with_config({"daily": {"folder": "/Daily"}})
+        config = load_vault_config(vault)
+        assert config.daily.folder == "Daily"
+
+    def test_load_rooted_inbox_folder(self, vault_with_config):
+        """Leading slashes are treated as vault-rooted for inbox folder."""
+        vault = vault_with_config({"inbox": {"folder": "/Inbox"}})
+        config = load_vault_config(vault)
+        assert config.inbox.folder == "Inbox"
+
     @pytest.mark.parametrize(
         "folder",
         [
-            "/Daily",
             "../Daily",
             "Daily\x00",
         ],

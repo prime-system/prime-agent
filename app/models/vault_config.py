@@ -9,27 +9,30 @@ from pydantic import BaseModel, Field, field_validator
 
 
 def _validate_relative_folder(folder: str) -> str:
-    """Validate folder path to prevent directory traversal."""
+    """Validate folder path to prevent directory traversal.
+
+    Leading path separators are treated as vault-rooted and stripped.
+    """
     if not folder or not isinstance(folder, str):
         msg = "folder must be a non-empty string"
         raise ValueError(msg)
 
+    normalized = folder.lstrip("/\\")
+    if not normalized:
+        msg = "folder must be a non-empty string"
+        raise ValueError(msg)
+
     # Check for path traversal
-    if ".." in folder:
+    if ".." in normalized:
         msg = "folder cannot contain '..'"
         raise ValueError(msg)
 
-    # Check for absolute paths
-    if folder.startswith(("/", "\\")):
-        msg = "folder must be relative"
-        raise ValueError(msg)
-
     # Check for null bytes
-    if "\x00" in folder:
+    if "\x00" in normalized:
         msg = "folder cannot contain null bytes"
         raise ValueError(msg)
 
-    return folder
+    return normalized
 
 
 class InboxConfig(BaseModel):

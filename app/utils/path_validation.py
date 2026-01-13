@@ -92,7 +92,7 @@ def validate_folder_name(folder: str, vault_root: Path) -> Path:
     Ensures the folder path:
     - Stays within vault root
     - Contains no path traversal sequences
-    - Contains no absolute paths
+    - Treats leading separators as vault-rooted
 
     Args:
         folder: Folder name or relative path (e.g., ".prime/inbox" or "Daily")
@@ -108,23 +108,23 @@ def validate_folder_name(folder: str, vault_root: Path) -> Path:
         msg = "Folder name must be a non-empty string"
         raise PathValidationError(msg)
 
+    normalized = folder.lstrip("/\\")
+    if not normalized:
+        msg = "Folder name must be a non-empty string"
+        raise PathValidationError(msg)
+
     # Check for null bytes
-    if "\x00" in folder:
+    if "\x00" in normalized:
         msg = "Folder name contains null bytes"
         raise PathValidationError(msg)
 
     # Check for path traversal
-    if ".." in folder:
+    if ".." in normalized:
         msg = "Folder name cannot contain '..'"
         raise PathValidationError(msg)
 
-    # Check for absolute paths
-    if folder.startswith(("/", "\\")):
-        msg = "Folder name must be relative"
-        raise PathValidationError(msg)
-
     # Check for multiple path separators in a row (e.g., "//", "\\\\")
-    if "//" in folder or "\\\\" in folder:
+    if "//" in normalized or "\\\\" in normalized:
         msg = "Folder name cannot contain consecutive separators"
         raise PathValidationError(msg)
 
@@ -132,7 +132,7 @@ def validate_folder_name(folder: str, vault_root: Path) -> Path:
     vault_root_resolved = vault_root.resolve()
 
     # Construct the folder path
-    folder_path = vault_root_resolved / folder
+    folder_path = vault_root_resolved / normalized
 
     # Resolve the folder path
     try:
@@ -145,7 +145,7 @@ def validate_folder_name(folder: str, vault_root: Path) -> Path:
     try:
         resolved_folder.relative_to(vault_root_resolved)
     except ValueError:
-        msg = f"Folder {folder} resolves outside vault root"
+        msg = f"Folder {normalized} resolves outside vault root"
         raise PathValidationError(msg)
 
     return resolved_folder
