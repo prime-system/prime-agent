@@ -281,8 +281,7 @@ The application uses a **dependency injection pattern** where services are initi
 - `VaultService` - Manages vault directory structure and path resolution
 - `GitService` - Handles git operations (pull, commit, push)
 - `InboxService` - Formats and writes capture files
-- `AgentService` - Invokes Claude Agent SDK for dump processing
-- `AgentWorker` - Orchestrates background processing with locking
+- `AgentService` - Invokes Claude Agent SDK for command execution
 - `APNService` - Sends push notifications to iOS/macOS clients
 
 ### Configuration System
@@ -323,7 +322,7 @@ base_url: https://app.example.com
 # HTTPS enforced - startup fails if HTTP base_url in production
 ```
 
-### Data Flow: Capture → Process → Organize
+### Data Flow: Capture → Command → Organize
 
 **Capture Flow** (app/api/capture.py):
 1. POST `/api/v1/capture` receives raw thought from client
@@ -331,32 +330,28 @@ base_url: https://app.example.com
 3. Queue git commit in background (non-blocking)
 4. Return immediately to client
 
-**Processing Flow** (app/services/worker.py):
-1. POST `/api/v1/processing/trigger` fires AgentWorker
-2. Worker acquires `vault_lock` (prevents concurrent processing)
-3. Pulls latest changes from git (if enabled)
-4. Invokes Claude Agent SDK with `/processCapture` prompt
-5. Agent reads unprocessed captures, organizes into vault structure
-6. Creates audit log in `.prime/logs/`
-7. Commits all changes to git
-8. Releases lock
+**Command Flow** (app/api/commands.py):
+1. POST `/api/v1/commands/{command}/trigger` starts a command run
+2. CommandRunManager tracks status + output events for polling
+3. AgentService executes the command via Claude Agent SDK
+4. Vault is updated according to command instructions
 
-**Key Insight:** Capture and processing are decoupled. Captures return instantly, processing happens on-demand via separate endpoint.
+**Key Insight:** Capture and command execution are decoupled. Captures return instantly, commands run on-demand or via schedule.
 
 ### Agent SDK Integration
 
-The system uses **Claude Agent SDK** (`claude_agent_sdk`) for autonomous processing:
+The system uses **Claude Agent SDK** (`claude_agent_sdk`) for autonomous command execution:
 
 **Configuration** (app/services/agent.py:128-138):
 - Runs in project directory (`cwd=vault_path`)
 - Loads `.claude/commands/` from vault (custom prompts)
 - Uses `permission_mode="acceptEdits"` (auto-approve file ops)
-- Budget-limited processing (`max_budget_usd`)
+- Budget-limited execution (`max_budget_usd`)
 
-**Processing Prompt:**
-- Custom command: `.claude/commands/processCapture.md` in vault (if exists)
-- Fallback: `app/prompts/processCapture.md` from source
-- Agent autonomously transforms inbox dumps into structured knowledge
+**Commands:**
+- Commands live in `.claude/commands/` inside the vault
+- Commands are invoked via `/api/v1/commands/{command}/trigger` or the scheduler
+- Agent behavior is defined by the command content
 
 ### Vault Structure
 
@@ -366,10 +361,9 @@ The system uses **Claude Agent SDK** (`claude_agent_sdk`) for autonomous process
 │   ├── settings.yaml        # Vault configuration (optional)
 │   ├── inbox/              # Default inbox location (configurable)
 │   │   └── 2026-W01/       # Weekly subfolders (optional)
-│   └── logs/               # Processing audit logs
 ├── .claude/
 │   └── commands/           # Custom agent prompts (optional)
-│       └── processCapture.md
+│       └── process_inbox.md
 ├── Daily/                  # Daily notes (created by agent)
 ├── Notes/                  # Permanent notes (created by agent)
 ├── Projects/               # Project folders (created by agent)
@@ -377,19 +371,13 @@ The system uses **Claude Agent SDK** (`claude_agent_sdk`) for autonomous process
 └── Questions/              # Open questions (created by agent)
 ```
 
-**Note:** Only `.prime/` directory is created at startup. All other folders (Daily, Notes, etc.) are created on-demand by the Claude Agent during processing.
+**Note:** Only `.prime/` directory is created at startup. All other folders (Daily, Notes, etc.) are created on-demand by the Claude Agent during command runs.
 
 ### Locking and Concurrency
 
 **Global Lock** (`vault_lock` in app/services/lock.py):
 - Protects vault filesystem from concurrent writes
-- Shared between capture endpoint and agent worker
-- Ensures git operations are serialized
-
-**Worker Singleton** (`AgentWorker._processing` flag):
-- Prevents multiple processing runs
-- Fire-and-forget trigger pattern
-- Automatically cleared even on exceptions
+- Used by the scheduler when `use_vault_lock` is enabled
 
 ### Background Task Error Tracking
 
@@ -444,7 +432,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 
 ### Git Integration
 
-**Three Git Operations:**
+**Two Git Operations:**
 
 1. **Auto-commit** (background, after capture):
    - Best-effort, errors ignored
@@ -455,11 +443,6 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
    - Background task in `lifespan()` (app/main.py:42-68)
    - Syncs remote changes to vault
    - Continues on errors
-
-3. **Processing commit** (after agent run):
-   - Commits all vault changes atomically
-   - Includes processing log
-   - Critical operation, logged on failure
 
 **Git Authentication:**
 - SSH: Requires `GIT_SSH_KEY` env var (private key)
@@ -801,7 +784,7 @@ This codebase uses custom exception classes that include contextual information 
 - `PrimeAgentError` - Base class for all custom exceptions
 - `GitError` - Git operation failures (clone, pull, commit, push)
 - `VaultError` - Vault filesystem and configuration errors
-- `AgentError` - Claude Agent SDK processing errors
+- `AgentError` - Claude Agent SDK command execution errors
 - `ConfigurationError` - Configuration loading/validation errors
 - `ValidationError` - Input validation failures
 - `InboxError` - Inbox file operation errors
@@ -1049,14 +1032,10 @@ async def my_endpoint(_: None = Depends(verify_token)) -> dict:
 
 ### Modifying Agent Behavior
 
-**Option 1: Vault-specific prompt** (recommended):
-1. Create `.claude/commands/processCapture.md` in vault
+**Vault-specific commands** (recommended):
+1. Create `.claude/commands/<command>.md` in the vault
 2. Add YAML frontmatter with command metadata
-3. Agent automatically uses vault version
-
-**Option 2: Default prompt** (affects all vaults):
-1. Edit `app/prompts/processCapture.md`
-2. Changes apply to vaults without custom command
+3. Trigger via `/api/v1/commands/{command}/trigger` or schedule it
 
 ### Adding Vault Configuration Options
 
@@ -1289,12 +1268,11 @@ docker compose restart primeai
 - `app/main.py` - Application entry point, service initialization
 - `app/config.py` - Configuration loading with env var expansion
 - `app/services/agent.py` - Claude Agent SDK integration
-- `app/services/worker.py` - Background processing orchestration
 - `app/services/vault.py` - Vault path management and structure
 - `app/services/git.py` - Git operations wrapper
 - `app/services/health.py` - Health check service
 - `app/api/capture.py` - Capture endpoint (write to inbox)
-- `app/api/processing.py` - Processing trigger endpoint
+- `app/api/commands.py` - Command execution endpoints
 - `app/api/health.py` - Health check endpoints
 - `app/models/vault_config.py` - Vault configuration schema
 - `app/models/health.py` - Health check models

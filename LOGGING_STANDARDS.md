@@ -69,26 +69,24 @@ logger.error("Git clone failed", extra={
 }, exc_info=True)
 ```
 
-### Agent Processing
+### Command Runs
 
 ```python
-logger.info("Agent worker initialized", extra={
-    "git_enabled": True,
+logger.info("Starting command run", extra={
+    "command_name": "process_inbox",
 })
 
-logger.info("Starting agent processing")
-
-logger.info("Processing completed successfully", extra={
+logger.info("Command completed successfully", extra={
     "duration_seconds": 45.23,
     "cost_usd": 0.0123,
 })
 
-logger.error("Processing failed", extra={
+logger.error("Command failed", extra={
     "duration_seconds": 60.0,
     "error": "Agent error message",
 })
 
-logger.error("Agent processing timed out", extra={
+logger.error("Command timed out", extra={
     "timeout_seconds": 300,
 })
 ```

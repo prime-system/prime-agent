@@ -18,7 +18,7 @@ class TestAgentServiceTimeout:
 
     @pytest.mark.asyncio
     async def test_agent_processing_timeout(self, tmp_path: Path) -> None:
-        """Verify agent processing respects timeout."""
+        """Verify agent command execution respects timeout."""
         agent = AgentService(
             vault_path=str(tmp_path),
             api_key="test-key",
@@ -31,7 +31,7 @@ class TestAgentServiceTimeout:
             yield MagicMock()
 
         with patch("app.services.agent.query", side_effect=slow_query):
-            result = await agent.process_dumps()
+            result = await agent.run_command("test")
 
         # Should timeout and return error
         assert result["success"] is False
@@ -40,7 +40,7 @@ class TestAgentServiceTimeout:
 
     @pytest.mark.asyncio
     async def test_agent_processing_completes_before_timeout(self, tmp_path: Path) -> None:
-        """Verify agent processing completes successfully within timeout."""
+        """Verify agent command execution completes successfully within timeout."""
         agent = AgentService(
             vault_path=str(tmp_path),
             api_key="test-key",
@@ -59,7 +59,7 @@ class TestAgentServiceTimeout:
             yield result_message
 
         with patch("app.services.agent.query", side_effect=fast_query):
-            result = await agent.process_dumps()
+            result = await agent.run_command("test")
 
         # Should succeed
         assert result["success"] is True
@@ -216,7 +216,7 @@ class TestTimeoutErrorHandling:
             yield MagicMock()
 
         with patch("app.services.agent.query", side_effect=slow_query):
-            result = await agent.process_dumps()
+            result = await agent.run_command("test")
 
         # Verify error structure
         assert "success" in result

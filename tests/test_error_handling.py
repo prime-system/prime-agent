@@ -72,7 +72,7 @@ class TestCustomExceptions:
     def test_agent_error_with_context(self) -> None:
         """AgentError includes context."""
         context = {
-            "operation": "process_dumps",
+            "operation": "run_command",
             "timeout_seconds": 300,
             "cost_usd": 1.23,
         }

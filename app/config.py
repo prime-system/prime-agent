@@ -173,7 +173,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str  # Required for Claude Agent SDK
     anthropic_base_url: str | None = None  # Optional custom API endpoint
     agent_model: str  # Required agent model for chat
-    agent_max_budget_usd: float = 2.0  # Safety limit per processing run
+    agent_max_budget_usd: float = 2.0  # Safety limit per command run
 
     # API timeouts (in seconds)
     anthropic_timeout_seconds: int = Field(

@@ -108,7 +108,6 @@ class TestConfigEndpoint:
         features = data["features"]
         assert "git_enabled" in features
         assert "workspaces_enabled" in features
-        assert "custom_process_prompt" in features
 
         # Check that removed fields are NOT in response
         assert "processing_enabled" not in features
@@ -138,32 +137,6 @@ class TestConfigEndpoint:
 
         data = response.json()
         assert data["features"]["git_enabled"] is False
-
-    def test_config_with_custom_prompt(self, client, temp_vault):
-        """Test config when user has created processCapture.md in vault."""
-        # Create custom command in vault
-        commands_dir = temp_vault / ".claude" / "commands"
-        commands_dir.mkdir(parents=True, exist_ok=True)
-        (commands_dir / "processCapture.md").write_text("# Custom prompt")
-
-        response = client.get("/api/v1/config", headers={"Authorization": "Bearer test-token-123"})
-        assert response.status_code == 200
-
-        data = response.json()
-        assert data["features"]["custom_process_prompt"] is True
-
-    def test_config_without_custom_prompt(self, client, temp_vault):
-        """Test config when no vault file exists (using default template)."""
-        # Ensure no vault file exists
-        custom_path = temp_vault / ".claude" / "commands" / "processCapture.md"
-        if custom_path.exists():
-            custom_path.unlink()
-
-        response = client.get("/api/v1/config", headers={"Authorization": "Bearer test-token-123"})
-        assert response.status_code == 200
-
-        data = response.json()
-        assert data["features"]["custom_process_prompt"] is False
 
     def test_config_workspaces_enabled(self, client, mock_settings):
         """Test config when workspaces are enabled in settings."""
@@ -196,23 +169,17 @@ class TestConfigEndpoint:
         assert data["server_info"]["version"] == "0.1.0"
         assert data["server_info"]["prime_agent_id"] == "agent-123"
 
-    def test_config_full_scenario_all_features_enabled(self, client, temp_vault, mock_settings):
+    def test_config_full_scenario_all_features_enabled(self, client, mock_settings):
         """Test config with all features enabled."""
         # Enable git and workspaces in settings
         mock_settings.git_enabled = True
         mock_settings.workspaces_enabled = True
-
-        # Create custom processCapture in vault
-        commands_dir = temp_vault / ".claude" / "commands"
-        commands_dir.mkdir(parents=True, exist_ok=True)
-        (commands_dir / "processCapture.md").write_text("# Custom prompt")
 
         response = client.get("/api/v1/config", headers={"Authorization": "Bearer test-token-123"})
         assert response.status_code == 200
 
         data = response.json()
         assert data["features"]["git_enabled"] is True
-        assert data["features"]["custom_process_prompt"] is True
         assert data["features"]["workspaces_enabled"] is True
         assert data["server_info"]["name"] == "Prime"
         assert data["server_info"]["version"] == "0.1.0"
@@ -227,5 +194,4 @@ class TestConfigEndpoint:
 
         data = response.json()
         assert data["features"]["git_enabled"] is False
-        assert data["features"]["custom_process_prompt"] is False
         assert data["features"]["workspaces_enabled"] is False

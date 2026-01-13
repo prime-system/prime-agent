@@ -1,8 +1,8 @@
 # PrimeAgent
 
-**The intelligent processing engine for Prime.**
+**The intelligent command engine for Prime.**
 
-A FastAPI server that receives raw brain dumps and transforms them into structured Markdown notes using the Claude Agent SDK. The processing layer that turns chaotic thoughts into clear knowledge.
+A FastAPI server that receives raw brain dumps and runs Claude Agent SDK commands to transform them into structured Markdown notes.
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/Status-Alpha-orange.svg)]()
@@ -15,13 +15,12 @@ A FastAPI server that receives raw brain dumps and transforms them into structur
 PrimeAgent is the **server component** of the Prime personal knowledge system. It provides:
 
 - **HTTP API** for capturing raw, unstructured thoughts
-- **Intelligent Processing** using Claude Agent SDK to restructure content
-- **Asynchronous Agent** that splits ideas, creates links, extracts tasks
+- **Command Execution** using Claude Agent SDK to restructure content
+- **Asynchronous Agent** that can split ideas, create links, extract tasks
 - **Git Sync** to version-control your knowledge vault
-- **Serialized Processing** ensuring deterministic, repeatable results
 
 **Part of the Prime Ecosystem:**
-- **PrimeAgent** (this repo) - Server and processing engine
+- **PrimeAgent** (this repo) - Server and command engine
 - **Prime-App** (private) - iOS/macOS/iPadOS capture app
 
 ---
@@ -31,7 +30,7 @@ PrimeAgent is the **server component** of the Prime personal knowledge system. I
 Traditional note-taking requires organization at capture time. PrimeAgent separates capture from thinking:
 
 1. **Capture is dumb** - Accept raw, unstructured input via API
-2. **Processing is intelligent** - Claude Agent SDK makes all structural decisions
+2. **Commands are intelligent** - Claude Agent SDK makes structural decisions
 3. **Knowledge is durable** - Output is plain Markdown, version-controlled, tool-agnostic
 
 > *"I think freely now. Clarity appears later."*
@@ -40,16 +39,16 @@ Traditional note-taking requires organization at capture time. PrimeAgent separa
 
 ## Features
 
-- **RESTful API** - Simple HTTP endpoints for capture and status
+- **RESTful API** - Simple HTTP endpoints for capture and command runs
 - **Individual Capture Files** - Each dump stored separately with YAML frontmatter
-- **Claude Agent SDK** - Intelligent, opinionated async processing
+- **Claude Agent SDK** - Intelligent, opinionated async command execution
 - **Markdown Output** - Zettelkasten-style notes with wiki-style links
-- **Git Integration** - Automatic commit and push after processing
+- **Git Integration** - Automatic commit and push after captures
 - **Task Extraction** - Automatic identification of actionable items
 - **Question Extraction** - Capture open questions for later review
 - **Project Tracking** - Group related ideas into project-centric notes
 - **Daily Synthesis** - Aggregate insights into daily notes
-- **Push Notifications** - APNs support for processing status updates
+- **Push Notifications** - APNs support for agent activity updates
 - **Budget Control** - Configurable Claude API spending limits
 - **Configurable Inbox** - Customize folder structure, filenames, and organization
 
@@ -141,47 +140,52 @@ curl -X POST http://localhost:8000/api/v1/capture \
 }
 ```
 
-### Trigger Processing
+### Trigger a Command
 
-Processing is manual - trigger it when ready:
+Commands live in your vault under `.claude/commands/`. Trigger one when ready:
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/processing/trigger \
-  -H "Authorization: Bearer $AUTH_TOKEN"
+curl -X POST http://localhost:8000/api/v1/commands/process_inbox/trigger \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"arguments": ""}'
 ```
 
-### Check Processing Status
+### Check Command Run Status
 
 ```bash
-curl http://localhost:8000/api/v1/processing/status \
+curl http://localhost:8000/api/v1/commands/runs/cmdrun_abc123 \
   -H "Authorization: Bearer $AUTH_TOKEN"
 ```
 
 **Response:**
 ```json
 {
-  "is_running": false,
-  "last_run": {
-    "timestamp": "2026-01-04T21:32:15Z",
-    "duration_seconds": 45.2,
-    "cost_usd": 0.0234,
-    "success": true
-  },
-  "unprocessed_count": 0
+  "run_id": "cmdrun_abc123",
+  "command_name": "process_inbox",
+  "status": "completed",
+  "started_at": "2026-01-04T21:32:15Z",
+  "completed_at": "2026-01-04T21:32:59Z",
+  "cost_usd": 0.0234,
+  "duration_ms": 44200,
+  "error": null,
+  "events": [],
+  "next_cursor": -1,
+  "dropped_before": 0
 }
 ```
 
-### What Happens During Processing
+### What Happens During a Command Run
 
-The agent automatically:
+Command behavior is defined by the command content in `.claude/commands/`. For example,
+an inbox-processing command might:
 
-1. **Reads Unprocessed Captures** - Scans inbox for files without `processed: true`
-2. **Splits Ideas** - Separates distinct concepts (auth refactoring vs. rate limiting)
-3. **Creates Notes** - Generates structured Markdown files in vault
-4. **Extracts Tasks** - Identifies actionable items
-5. **Links Concepts** - Creates wiki-style links between related notes
-6. **Marks Complete** - Updates captures with `processed: true` in frontmatter
-7. **Commits to Git** - Version-controls all changes (if enabled)
+1. **Read Unprocessed Captures** - Scan inbox for files without `processed: true`
+2. **Split Ideas** - Separate distinct concepts (auth refactoring vs. rate limiting)
+3. **Create Notes** - Generate structured Markdown files in the vault
+4. **Extract Tasks** - Identify actionable items
+5. **Link Concepts** - Create wiki-style links between related notes
+6. **Mark Complete** - Update captures with `processed: true` in frontmatter
 
 ### View the Results
 
@@ -193,8 +197,6 @@ vault/
 │   ├── inbox/
 │   │   └── 2026-W01/
 │   │       └── 2026-01-04_21-30-45_mac.md    # Original capture
-│   └── logs/
-│       └── 2026-01-04_21-32-15_process.md    # Processing log
 ├── Daily/
 │   └── 2026-01-04.md                          # Daily synthesis
 ├── Notes/
@@ -213,10 +215,10 @@ vault/
 ### Three Layers
 
 1. **Capture Layer** - FastAPI HTTP endpoints (instant response, fire-and-forget)
-2. **Processing Layer** - Claude Agent SDK (intelligent, asynchronous, serialized)
+2. **Command Layer** - Claude Agent SDK (manual or scheduled command execution)
 3. **Knowledge Layer** - Markdown files (Zettelkasten, Git-synced, Obsidian-compatible)
 
-### Processing Flow
+### Command Flow
 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌────────────────┐
@@ -224,37 +226,19 @@ vault/
 │  /api/v1/capture   │     │  File        │     │  Immediately   │
 └─────────────┘     └──────────────┘     └────────────────┘
 
-                    (Manual Trigger)
+                    (Manual or Scheduled Trigger)
 
 ┌─────────────┐     ┌──────────────┐     ┌────────────────┐
-│  POST       │────▶│ Start Agent  │────▶│ Process All    │
-│  /api/v1/processing/trigger   │     │  Worker      │     │  Unprocessed   │
+│  POST       │────▶│ Run Command  │────▶│ Update Vault   │
+│  /api/v1/commands/{command}/trigger │     │ (Claude SDK)   │
 └─────────────┘     └──────────────┘     └────────────────┘
-                                                   │
-                                                   ▼
-┌─────────────┐     ┌──────────────┐     ┌────────────────┐
-│  Git Push   │◀────│  Commit      │◀────│ Update Vault   │
-│  (optional) │     │  Changes     │     │ (Claude SDK)   │
-└─────────────┘     └──────────────┘     └────────────────┘
-                                                   │
-                                                   ▼
-                                          ┌────────────────┐
-                                          │ Mark Processed │
-                                          │ Create Log     │
-                                          └────────────────┘
 ```
 
-### Serialized Processing
+### Command Concurrency
 
-**Critical Design Decision:** Processing is strictly serialized (one at a time).
-
-Why:
-- Ensures deterministic results
-- Prevents Git conflicts
-- Maintains context across runs
-- Allows agent to read/modify entire vault safely
-
-This is intentional, not a limitation.
+Command runs are not serialized by default. If a command mutates the vault,
+avoid overlapping runs or configure scheduled jobs with `use_vault_lock`
+to serialize access.
 
 ---
 
@@ -445,72 +429,42 @@ Content-Type: application/json
 }
 ```
 
-### Trigger Processing
+### List Commands
 
 ```http
-POST /api/v1/processing/trigger
+GET /api/v1/commands
 Authorization: Bearer {AUTH_TOKEN}
+```
+
+### Trigger Command
+
+```http
+POST /api/v1/commands/{command_name}/trigger
+Authorization: Bearer {AUTH_TOKEN}
+Content-Type: application/json
+```
+
+**Body:**
+```json
+{
+  "arguments": "optional arguments string"
+}
 ```
 
 **Response:**
 ```json
 {
+  "run_id": "cmdrun_abc123",
   "status": "started",
-  "message": "Processing started"
+  "poll_url": "/api/v1/commands/runs/cmdrun_abc123"
 }
 ```
 
-or if already running:
-```json
-{
-  "status": "already_running",
-  "message": "Processing already in progress"
-}
-```
-
-### Get Processing Status
+### Get Command Run Status
 
 ```http
-GET /api/v1/processing/status
+GET /api/v1/commands/runs/{run_id}?after={cursor}
 Authorization: Bearer {AUTH_TOKEN}
-```
-
-**Response:**
-```json
-{
-  "is_running": false,
-  "last_run": {
-    "timestamp": "2026-01-04T21:32:15Z",
-    "duration_seconds": 45.2,
-    "cost_usd": 0.0234,
-    "success": true
-  },
-  "unprocessed_count": 3
-}
-```
-
-### Get Processing Queue
-
-```http
-GET /api/v1/processing/queue
-Authorization: Bearer {AUTH_TOKEN}
-```
-
-**Response:**
-```json
-{
-  "count": 3,
-  "dumps": [
-    {
-      "id": "2026-01-04T20:15:30Z-iphone",
-      "file": ".prime/inbox/2026-W01/2026-01-04_20-15-30_iphone.md",
-      "captured_at": "2026-01-04T20:15:30Z",
-      "source": "iphone",
-      "input": "voice",
-      "preview": "Had an idea about the new feature..."
-    }
-  ]
-}
 ```
 
 ### Git Operations
@@ -692,7 +646,7 @@ docker run --rm \
 
 **Monitoring:**
 - Health endpoint: `GET /health`
-- Processing status: `GET /api/v1/processing/status`
+- Command runs: `GET /api/v1/commands/runs/{run_id}`
 - Docker logs: `docker compose logs -f primeagent`
 
 **Security:**
@@ -788,7 +742,7 @@ PrimeAgent/
 │   ├── version.py           # Version info
 │   ├── api/                 # API endpoints
 │   │   ├── capture.py       # Capture endpoint
-│   │   ├── processing.py    # Processing control
+│   │   ├── commands.py      # Command execution
 │   │   ├── push.py          # Push notifications
 │   │   ├── git.py           # Git operations
 │   │   ├── files.py         # File operations
@@ -801,13 +755,10 @@ PrimeAgent/
 │   │   └── ...
 │   ├── services/            # Business logic
 │   │   ├── agent.py         # Claude Agent SDK
-│   │   ├── worker.py        # Processing worker
 │   │   ├── vault.py         # Vault management
 │   │   ├── git.py           # Git operations
 │   │   ├── inbox.py         # Inbox operations
 │   │   └── ...
-│   ├── prompts/             # Agent prompts
-│   │   └── processCapture.md
 │   └── utils/               # Utilities
 ├── tests/                   # Test suite
 ├── scripts/                 # Helper scripts
@@ -840,10 +791,9 @@ vault/
 │   ├── schedule.yaml        # Scheduled slash commands (optional)
 │   ├── inbox/              # Captured thoughts
 │   │   └── 2026-W01/       # Weekly subfolders (optional)
-│   └── logs/               # Processing run logs
 ├── .claude/
 │   └── commands/           # Custom agent prompts (optional)
-│       └── processCapture.md
+│       └── process_inbox.md
 ├── Daily/                  # Daily synthesis notes
 ├── Notes/                  # Atomic notes with links
 ├── Projects/               # Project-centric notes
@@ -851,7 +801,7 @@ vault/
 └── Questions/              # Open questions for review
 ```
 
-**Note:** Only `.prime/` directory is created automatically. All other folders (Daily, Notes, Projects, etc.) are created by the agent during processing based on your vault's needs.
+**Note:** Only `.prime/` directory is created automatically. All other folders (Daily, Notes, Projects, etc.) are created by the agent during command runs based on your vault's needs.
 
 ---
 
@@ -992,25 +942,27 @@ grep -E "GIT_USERNAME|GIT_TOKEN" .env
 grep -A5 "^git:" config.default.yaml
 ```
 
-### Processing Not Working
+### Command Runs Not Working
 
-**Agent not processing captures:**
+**Agent not running commands:**
 
 ```bash
-# Check processing status
-curl http://localhost:8000/api/v1/processing/status \
+# List commands
+curl http://localhost:8000/api/v1/commands \
   -H "Authorization: Bearer $AUTH_TOKEN"
 
-# Check queue
-curl http://localhost:8000/api/v1/processing/queue \
-  -H "Authorization: Bearer $AUTH_TOKEN"
+# Trigger a command
+curl -X POST http://localhost:8000/api/v1/commands/process_inbox/trigger \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"arguments": ""}'
 
-# Manually trigger
-curl -X POST http://localhost:8000/api/v1/processing/trigger \
+# Check run status
+curl http://localhost:8000/api/v1/commands/runs/cmdrun_abc123 \
   -H "Authorization: Bearer $AUTH_TOKEN"
 
 # Check logs
-docker compose logs primeagent | grep -i process
+docker compose logs primeagent | grep -i command
 ```
 
 **Budget exceeded:**
@@ -1043,13 +995,12 @@ docker compose restart primeagent
 
 PrimeAgent is functional for personal use but still evolving rapidly. Expect:
 - API changes without deprecation warnings
-- Processing behavior refinements
+- Command behavior refinements
 - Occasional updates to vault structure
 
 **Known Limitations:**
 - Single-user only (no multi-user support planned)
-- Processing can take several minutes for large captures
-- No parallel processing (intentional design decision)
+- Command runs can take several minutes for large captures
 - Requires technical setup (Docker, API keys, Git)
 
 ---
@@ -1057,10 +1008,10 @@ PrimeAgent is functional for personal use but still evolving rapidly. Expect:
 ## Roadmap
 
 **Near-term:**
-- Web UI for vault browsing and processing control
-- Improved processing speed and context handling
+- Web UI for vault browsing and command control
+- Improved command speed and context handling
 - Better error recovery and retry logic
-- Webhook support for processing events
+- Webhook support for command events
 
 **Future:**
 - Automated daily/weekly synthesis

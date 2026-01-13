@@ -1,8 +1,8 @@
 """
-Agent service for processing dumps using Claude Agent SDK.
+Agent service for running commands using Claude Agent SDK.
 
 This module provides the core integration with the Claude Agent SDK,
-managing the transformation of raw brain dumps into structured knowledge.
+executing vault-scoped commands that can organize and enrich captures.
 """
 
 import asyncio
@@ -21,13 +21,6 @@ from claude_agent_sdk import (
     query,
 )
 
-from app.exceptions import AgentError
-from app.utils.frontmatter import (
-    FrontmatterError,
-    parse_and_validate_command,
-    strip_frontmatter,
-)
-
 logger = logging.getLogger(__name__)
 
 
@@ -42,11 +35,10 @@ class ProcessResult(TypedDict):
 
 class AgentService:
     """
-    Manages Claude Agent SDK invocation for dump processing.
+    Manages Claude Agent SDK invocation for command execution.
 
-    The agent reads unprocessed dumps from Inbox/, transforms them into
-    structured knowledge, and writes to Daily/, Notes/, Projects/, Tasks/,
-    and Questions/ folders.
+    Commands run in the vault directory and can read/update vault content
+    according to their instructions.
     """
 
     def __init__(
@@ -68,8 +60,8 @@ class AgentService:
             base_url: Optional custom API endpoint
             prime_api_url: Prime API base URL for notify skill
             prime_api_token: Prime API auth token for notify skill
-            max_budget_usd: Maximum cost per processing run (safety limit)
-            timeout_seconds: Timeout for agent processing in seconds
+            max_budget_usd: Maximum cost per command run (safety limit)
+            timeout_seconds: Timeout for agent execution in seconds
         """
         self.vault_path = Path(vault_path)
         self.api_key = api_key
@@ -78,68 +70,6 @@ class AgentService:
         self.prime_api_token = prime_api_token
         self.max_budget_usd = max_budget_usd
         self.timeout_seconds = timeout_seconds
-
-    def _get_process_capture_prompt(self) -> str:
-        """
-        Get the prompt for processing captures.
-
-        If processCapture command exists in vault (.claude/commands/processCapture.md),
-        returns "/processCapture" to invoke it as a slash command.
-        Otherwise, loads and returns the template content from source code.
-
-        Returns:
-            Either "/processCapture" slash command or template content string
-        """
-        # Check if custom command exists in vault
-        vault_command_path = self.vault_path / ".claude" / "commands" / "processCapture.md"
-
-        if vault_command_path.exists():
-            # Use slash command - SDK will load it automatically
-            logger.info(
-                "Using processCapture command from vault",
-                extra={
-                    "command_path": str(vault_command_path),
-                },
-            )
-            return "/processCapture"
-
-        # Fall back to loading template content from source code
-        template_path = Path(__file__).parent.parent / "prompts" / "processCapture.md"
-        logger.info(
-            "No vault command found, loading template",
-            extra={
-                "template_path": str(template_path),
-            },
-        )
-
-        if not template_path.exists():
-            msg = f"processCapture template not found: {template_path}"
-            raise AgentError(
-                msg,
-                context={
-                    "operation": "get_process_capture_prompt",
-                    "template_path": str(template_path),
-                    "vault_path": str(self.vault_path),
-                },
-            )
-
-        command_content = template_path.read_text()
-
-        # Strip YAML frontmatter using robust parser
-        try:
-            _, actual_content = parse_and_validate_command(command_content)
-            actual_content = actual_content.strip()
-        except FrontmatterError:
-            # If parsing fails, try simple fallback
-            actual_content = strip_frontmatter(command_content).strip()
-
-        logger.debug(
-            "Loaded template content",
-            extra={
-                "content_length": len(actual_content),
-            },
-        )
-        return actual_content
 
     async def _emit_events_for_message(
         self,
@@ -361,33 +291,6 @@ class AgentService:
                 "duration_ms": duration_ms_value,
                 "error": str(e),
             }
-
-    async def process_dumps(self) -> ProcessResult:
-        """
-        Process all unprocessed dumps using Claude Agent SDK.
-
-        The agent will:
-        1. Read all unprocessed dumps from Inbox/
-        2. Transform them into structured knowledge
-        3. Write to appropriate vault folders
-        4. Mark dumps as processed
-
-        Returns:
-            Dictionary with processing results:
-            {
-                "success": bool,
-                "cost_usd": Optional[float],
-                "duration_ms": int,
-                "error": Optional[str]
-            }
-        """
-        command_prompt = self._get_process_capture_prompt()
-        command_name = "processCapture" if command_prompt.startswith("/") else None
-        return await self._run_prompt(
-            command_prompt,
-            run_label="process_dumps",
-            command_name=command_name,
-        )
 
     async def run_command(
         self,

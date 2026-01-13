@@ -21,9 +21,6 @@ class FeaturesResponse(BaseModel):
 
     git_enabled: bool = Field(description="Whether Git sync is configured and available")
     workspaces_enabled: bool = Field(description="Whether workspace/vault switching is supported")
-    custom_process_prompt: bool = Field(
-        description="Whether user has customized the processCapture prompt"
-    )
 
 
 class ServerInfoResponse(BaseModel):
@@ -43,7 +40,6 @@ class ConfigResponse(BaseModel):
 
 @router.get("/config", response_model=ConfigResponse)
 async def get_config(
-    vault_service: VaultService = Depends(get_vault_service),
     agent_identity_service: AgentIdentityService = Depends(get_agent_identity_service),
     _: None = Depends(verify_token),
 ) -> ConfigResponse:
@@ -55,17 +51,10 @@ async def get_config(
 
     Requires authentication token.
     """
-    vault_path = vault_service.vault_path
-
-    # Check if user has created a custom processCapture.md in vault
-    # If not, agent will use the default template from app/prompts/
-    custom_process_prompt = (vault_path / ".claude" / "commands" / "processCapture.md").exists()
-
     return ConfigResponse(
         features=FeaturesResponse(
             git_enabled=settings.git_enabled,
             workspaces_enabled=settings.workspaces_enabled,
-            custom_process_prompt=custom_process_prompt,
         ),
         server_info=ServerInfoResponse(
             name="Prime",

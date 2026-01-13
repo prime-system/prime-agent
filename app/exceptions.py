@@ -81,7 +81,7 @@ class AgentError(PrimeAgentError):
         raise AgentError(
             "Agent timeout during processing",
             context={
-                "operation": "process_dumps",
+                "operation": "run_command",
                 "timeout_seconds": 300,
                 "cost_usd": 1.23
             }

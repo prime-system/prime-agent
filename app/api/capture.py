@@ -34,8 +34,8 @@ async def capture(
     4. Return response immediately
     5. Commit and push to git in background (errors ignored)
 
-    Note: Processing is triggered manually via the /api/v1/processing/trigger endpoint.
-    This ensures the capture endpoint returns instantly without any processing overhead.
+    Note: Any downstream processing is triggered separately (for example via the
+    commands trigger endpoint) to keep capture fast and non-blocking.
     """
     dump_id = inbox_service.generate_dump_id(request.captured_at, request.source.value)
 

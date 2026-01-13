@@ -28,7 +28,6 @@ async def test_no_threading_locks_in_async_files() -> None:
         "app/services/relay_client.py",
         "app/api/push.py",
         "app/main.py",
-        "app/services/worker.py",
         "app/services/agent_session_manager.py",
         "app/services/background_tasks.py",
     ]

@@ -17,7 +17,6 @@ from app.api import (
     git,
     health,
     monitoring,
-    processing,
     push,
     schedule,
     vault_browser,
@@ -45,7 +44,6 @@ from app.services.relay_client import PrimePushRelayClient
 from app.services.schedule import ScheduleService
 from app.services.vault import VaultService
 from app.services.vault_browser import VaultBrowserService
-from app.services.worker import AgentWorker
 from app.version import get_version
 
 # Configure structured JSON logging
@@ -226,15 +224,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         schedule_service=schedule_service,
     )
 
-    # Initialize agent worker
-    AgentWorker.initialize(agent_service, git_service, log_service)
-
     if settings.git_enabled:
         logger.info(f"Prime server ready (Git-enabled: {settings.vault_repo_url})")
     else:
         logger.info("Prime server ready (local-only mode)")
-
-    logger.info("Agent worker initialized and ready")
 
     # Start schedule loop
     schedule_service.start()
@@ -304,7 +297,6 @@ app.include_router(files.router, tags=["files"])
 app.include_router(git.router, tags=["git"])
 app.include_router(health.router)
 app.include_router(monitoring.router, tags=["monitoring"])
-app.include_router(processing.router)
 app.include_router(schedule.router, tags=["schedule"])
 app.include_router(push.router, tags=["push"])
 app.include_router(vault_browser.router, tags=["vault"])
