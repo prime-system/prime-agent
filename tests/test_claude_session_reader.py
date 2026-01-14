@@ -244,6 +244,44 @@ def test_session_ordering(
     assert sessions[2]["session_id"] == "session-1"
 
 
+def test_session_ordering_tie_breaker(
+    temp_project_path: Path,
+    temp_claude_home: Path,
+    sessions_dir: Path,
+):
+    """Test that sessions with same activity use session_id as tie-breaker."""
+    timestamp = "2025-12-28T10:00:00.000Z"
+    create_test_session(
+        sessions_dir,
+        "session-b",
+        [
+            {
+                "type": "user",
+                "uuid": "msg-1",
+                "timestamp": timestamp,
+                "message": {"role": "user", "content": "Same time"},
+            }
+        ],
+    )
+    create_test_session(
+        sessions_dir,
+        "session-a",
+        [
+            {
+                "type": "user",
+                "uuid": "msg-2",
+                "timestamp": timestamp,
+                "message": {"role": "user", "content": "Same time"},
+            }
+        ],
+    )
+
+    reader = ClaudeSessionReader(temp_project_path, temp_claude_home)
+    sessions = reader.list_sessions()
+
+    assert [session["session_id"] for session in sessions] == ["session-b", "session-a"]
+
+
 def test_message_content_extraction():
     """Test message content extraction from different formats."""
     # String content

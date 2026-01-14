@@ -165,9 +165,9 @@ class ClaudeSessionReader:
                 logger.warning("Failed to read session %s: %s", session_id, e)
                 continue
 
-        # Sort by last activity (newest first)
+        # Sort by last activity (newest first), tie-breaker by session_id (desc)
         sessions.sort(
-            key=lambda s: s["last_activity"] or "",
+            key=lambda s: (s["last_activity"] or "", s["session_id"]),
             reverse=True,
         )
 

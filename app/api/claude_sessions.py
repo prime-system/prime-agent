@@ -4,10 +4,13 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.dependencies import get_claude_session_api
 from app.services.claude_session_api import ClaudeSessionAPI
+from app.utils.claude_session_pagination import paginate_sessions
+from app.utils.pagination import PaginationError
 from app.utils.path_validation import PathValidationError, validate_session_id
 
 logger = logging.getLogger(__name__)
@@ -19,6 +22,8 @@ class SessionListResponse(BaseModel):
 
     sessions: list[dict[str, Any]]
     total: int
+    next_cursor: str | None = None
+    has_more: bool = False
 
 
 class SessionDetailResponse(BaseModel):
@@ -49,8 +54,9 @@ async def list_sessions(
     ),
     limit: int = Query(50, ge=1, le=500, description="Maximum number of sessions"),
     query: str | None = Query(None, description="Search query for session summaries"),
+    cursor: str | None = Query(None, description="Opaque cursor for pagination"),
     claude_session_api: ClaudeSessionAPI = Depends(get_claude_session_api),
-) -> SessionListResponse:
+) -> SessionListResponse | JSONResponse:
     """
     List available Claude Code sessions.
 
@@ -61,6 +67,7 @@ async def list_sessions(
         include_agent_sessions: Whether to include agent sessions
         limit: Maximum number of sessions to return
         query: Optional search query for filtering by summary
+        cursor: Optional opaque cursor for pagination
 
     Returns:
         List of session metadata
@@ -69,19 +76,41 @@ async def list_sessions(
         sessions = claude_session_api.search_sessions(
             query=query,
             include_agent_sessions=include_agent_sessions,
-            limit=limit,
+            limit=None,
         )
     else:
         sessions = claude_session_api.list_sessions(
             include_agent_sessions=include_agent_sessions,
-            limit=limit,
+            limit=None,
         )
 
-    logger.info("Listed %d Claude sessions", len(sessions))
+    try:
+        page, next_cursor = paginate_sessions(sessions, limit, cursor)
+    except PaginationError as exc:
+        logger.warning(
+            "Invalid Claude sessions cursor",
+            extra={"cursor": cursor, "error": str(exc)},
+        )
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"error": "InvalidCursor", "message": str(exc)},
+        )
+
+    has_more = next_cursor is not None
+    logger.info(
+        "Listed Claude sessions",
+        extra={
+            "returned_count": len(page),
+            "limit": limit,
+            "has_more": has_more,
+        },
+    )
 
     return SessionListResponse(
-        sessions=sessions,
-        total=len(sessions),
+        sessions=page,
+        total=len(page),
+        next_cursor=next_cursor,
+        has_more=has_more,
     )
 
 

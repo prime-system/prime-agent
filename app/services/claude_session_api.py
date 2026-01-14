@@ -117,7 +117,7 @@ class ClaudeSessionAPI:
         self,
         query: str | None = None,
         include_agent_sessions: bool = False,
-        limit: int = 50,
+        limit: int | None = 50,
     ) -> list[dict[str, Any]]:
         """
         Search sessions by summary or content.
@@ -125,7 +125,7 @@ class ClaudeSessionAPI:
         Args:
             query: Search query (searches in summary)
             include_agent_sessions: Whether to include agent sessions
-            limit: Maximum number of results
+            limit: Maximum number of results (None for all)
 
         Returns:
             List of matching session metadata
