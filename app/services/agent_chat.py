@@ -85,6 +85,7 @@ class AgentChatService:
             ClaudeAgentOptions configured for Prime
         """
         config = config or {}
+        model = config.get("model") or self.model
 
         # Build environment dict for API authentication
         env_dict = {"ANTHROPIC_API_KEY": self.api_key}
@@ -108,6 +109,7 @@ class AgentChatService:
             setting_sources=["project"],
             cwd=str(self.vault_path),
             env=env_dict,
+            model=model,
         )
 
         if resume:
