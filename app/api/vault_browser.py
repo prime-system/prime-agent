@@ -1,21 +1,43 @@
-"""Read-only vault browser API endpoints."""
+"""Vault browser API endpoints."""
 
 from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING, Annotated, Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+import yaml
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Header,
+    HTTPException,
+    Query,
+    Response,
+    status,
+)
+from pydantic import Field
 
-from app.dependencies import get_vault_browser_service, get_vault_service, verify_token
+from app.dependencies import (
+    get_git_service,
+    get_log_service,
+    get_vault_browser_service,
+    get_vault_service,
+    verify_token,
+)
 from app.exceptions import ValidationError, VaultError
 from app.models.vault_browser import FileItem, FileMetadata, FolderListingResponse, Item
 from app.models.vault_config import VaultConfig
+from app.services.background_tasks import safe_background_task
 from app.services.vault_browser import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, VaultBrowserService
 from app.utils.error_handling import format_exception_for_response
 from app.utils.pagination import PaginationError, paginate_items
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
+    from app.services.git import GitService
+    from app.services.logs import LogService
     from app.services.vault import VaultService
 
 logger = logging.getLogger(__name__)
@@ -28,6 +50,64 @@ SortOrder = Literal["asc", "desc"]
 
 class RangeNotSatisfiableError(ValueError):
     """Raised when a Range header is invalid or unsatisfiable."""
+
+
+class VaultSettingsUpdateResponse(VaultConfig):
+    """Response model for vault settings update."""
+
+    git_sync_queued: bool = Field(
+        default=False,
+        description="Whether a git sync was queued in the background",
+    )
+
+
+def _write_vault_settings_file(settings_path: Path, settings: VaultConfig) -> int:
+    """Write vault settings to disk atomically."""
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_payload = settings.model_dump()
+
+    try:
+        yaml_str = yaml.safe_dump(
+            settings_payload,
+            default_flow_style=False,
+            sort_keys=False,
+        )
+    except yaml.YAMLError as exc:
+        msg = "Failed to serialize vault settings"
+        raise VaultError(
+            msg,
+            context={
+                "operation": "serialize_vault_settings",
+                "path": str(settings_path),
+            },
+        ) from exc
+
+    temp_path = settings_path.with_suffix(".yaml.tmp")
+    try:
+        with temp_path.open("w", encoding="utf-8") as handle:
+            handle.write(yaml_str)
+            handle.flush()
+        temp_path.replace(settings_path)
+    except OSError as exc:
+        try:
+            temp_path.unlink()
+        except OSError:
+            logger.warning(
+                "Failed to remove temporary vault settings file",
+                extra={
+                    "path": str(temp_path),
+                },
+            )
+        msg = "Failed to write vault settings"
+        raise VaultError(
+            msg,
+            context={
+                "operation": "write_vault_settings",
+                "path": str(settings_path),
+            },
+        ) from exc
+
+    return len(yaml_str.encode("utf-8"))
 
 
 def parse_include_types(include: str) -> set[Literal["file", "folder"]]:
@@ -146,6 +226,73 @@ async def get_vault_settings(
 ) -> VaultConfig:
     """Get vault-specific settings with defaults applied."""
     return vault_service.vault_config
+
+
+@router.put("/settings", response_model=VaultSettingsUpdateResponse)
+async def update_vault_settings(
+    settings: VaultConfig,
+    background_tasks: BackgroundTasks,
+    vault_service: VaultService = Depends(get_vault_service),
+    git_service: GitService = Depends(get_git_service),
+    log_service: LogService = Depends(get_log_service),
+) -> VaultSettingsUpdateResponse:
+    """Update vault-specific settings and reload configuration."""
+    settings_path = vault_service.vault_path / ".prime" / "settings.yaml"
+    try:
+        vault_service.ensure_structure()
+        size_bytes = _write_vault_settings_file(settings_path, settings)
+        vault_service.reload_vault_config()
+        log_service.refresh_logs_dir()
+        updated_settings = vault_service.vault_config
+    except VaultError as exc:
+        logger.exception(
+            "Failed to update vault settings",
+            extra={
+                "path": str(settings_path),
+                "error": str(exc),
+                "error_type": type(exc).__name__,
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=format_exception_for_response(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception(
+            "Unexpected error updating vault settings",
+            extra={
+                "path": str(settings_path),
+                "error_type": type(exc).__name__,
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unexpected error updating vault settings",
+        ) from exc
+
+    git_sync_queued = False
+    if git_service.enabled:
+        background_tasks.add_task(
+            safe_background_task,
+            "git_vault_settings_update",
+            git_service.auto_commit_and_push,
+        )
+        git_sync_queued = True
+
+    logger.info(
+        "Vault settings updated",
+        extra={
+            "path": str(settings_path),
+            "size_bytes": size_bytes,
+            "git_enabled": git_service.enabled,
+            "git_sync_queued": git_sync_queued,
+        },
+    )
+
+    return VaultSettingsUpdateResponse(
+        **updated_settings.model_dump(),
+        git_sync_queued=git_sync_queued,
+    )
 
 
 @router.get("/folders", response_model=FolderListingResponse)

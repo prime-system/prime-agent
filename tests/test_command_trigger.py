@@ -91,7 +91,9 @@ def mock_container(
     vault_service.ensure_structure()
     container.vault_service = vault_service
     container.log_service = LogService(
-        logs_dir=vault_service.logs_path(), vault_path=vault_service.vault_path
+        logs_dir=vault_service.logs_path(),
+        vault_path=vault_service.vault_path,
+        vault_service=vault_service,
     )
     container.git_service = MagicMock()
     container.git_service.enabled = False

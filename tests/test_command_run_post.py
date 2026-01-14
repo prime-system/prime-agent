@@ -16,7 +16,9 @@ def _init_services(vault_path: Path) -> tuple[VaultService, LogService]:
     vault_service = VaultService(str(vault_path))
     vault_service.ensure_structure()
     log_service = LogService(
-        logs_dir=vault_service.logs_path(), vault_path=vault_service.vault_path
+        logs_dir=vault_service.logs_path(),
+        vault_path=vault_service.vault_path,
+        vault_service=vault_service,
     )
     return vault_service, log_service
 
@@ -158,3 +160,16 @@ def test_git_failure_still_writes_log(temp_vault: Path) -> None:
 
     log_files = list(vault_service.logs_path().glob("command-dailyBrief-*.md"))
     assert log_files, "Expected command run log file to be created even on git failure"
+
+
+def test_log_service_refreshes_logs_folder_from_settings(temp_vault: Path) -> None:
+    vault_service, log_service = _init_services(temp_vault)
+
+    settings_path = temp_vault / ".prime" / "settings.yaml"
+    settings_path.write_text("logs:\n  folder: CustomLogs\n", encoding="utf-8")
+
+    log_path = log_service.create_run_log(duration_seconds=0.5)
+    assert log_path.parts[0] == "CustomLogs"
+
+    created_log = temp_vault / log_path
+    assert created_log.exists()

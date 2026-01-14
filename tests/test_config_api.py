@@ -70,7 +70,9 @@ def client(temp_vault, test_app, mock_settings, auth_headers, monkeypatch):
         inbox_service=InboxService(),
         agent_service=MagicMock(),
         log_service=LogService(
-            logs_dir=vault_service.logs_path(), vault_path=vault_service.vault_path
+            logs_dir=vault_service.logs_path(),
+            vault_path=vault_service.vault_path,
+            vault_service=vault_service,
         ),
         chat_session_manager=MagicMock(),
         agent_chat_service=MagicMock(),

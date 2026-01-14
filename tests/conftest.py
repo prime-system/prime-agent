@@ -123,7 +123,9 @@ def client(temp_vault, mock_git_service, test_app):
     vault_service.ensure_structure()
     inbox_service = InboxService()
     log_service = LogService(
-        logs_dir=vault_service.logs_path(), vault_path=vault_service.vault_path
+        logs_dir=vault_service.logs_path(),
+        vault_path=vault_service.vault_path,
+        vault_service=vault_service,
     )
     chat_session_manager = ChatSessionManager(
         vault_path=str(temp_vault),

@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+import yaml
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -25,10 +26,13 @@ def vault_browser_client(temp_vault: Path):
 
     vault_service = VaultService(str(temp_vault))
     vault_service.ensure_structure()
+    git_service = MagicMock()
+    git_service.enabled = False
+    git_service.auto_commit_and_push = MagicMock()
 
     init_container(
         vault_service=vault_service,
-        git_service=MagicMock(),
+        git_service=git_service,
         inbox_service=MagicMock(),
         agent_service=MagicMock(),
         log_service=MagicMock(),
@@ -209,3 +213,76 @@ def test_vault_settings_partial_config_defaults(
     assert response.status_code == 200
     expected = VaultConfig(inbox=InboxConfig(folder="Inbox")).model_dump()
     assert response.json() == expected
+
+
+def test_vault_settings_update_overwrites_file(
+    vault_browser_client: TestClient,
+    temp_vault: Path,
+    auth_headers: dict[str, str],
+) -> None:
+    """Vault settings update should overwrite settings.yaml and reload."""
+    new_config = VaultConfig(
+        inbox=InboxConfig(
+            folder="07-Inbox",
+            weekly_subfolders=False,
+            file_pattern="{year}-{month}-{day}_{hour}-{minute}-{second}_{source}.md",
+        ),
+        logs=VaultConfig().logs,
+        daily=VaultConfig().daily,
+    )
+
+    response = vault_browser_client.put(
+        "/api/v1/vault/settings",
+        headers=auth_headers,
+        json=new_config.model_dump(),
+    )
+    assert response.status_code == 200
+    response_payload = response.json()
+    assert response_payload["git_sync_queued"] is False
+    response_payload.pop("git_sync_queued")
+    assert response_payload == new_config.model_dump()
+
+    settings_path = temp_vault / ".prime" / "settings.yaml"
+    saved = yaml.safe_load(settings_path.read_text(encoding="utf-8"))
+    assert saved == new_config.model_dump()
+
+    response_get = vault_browser_client.get("/api/v1/vault/settings", headers=auth_headers)
+    assert response_get.status_code == 200
+    assert response_get.json() == new_config.model_dump()
+
+
+def test_vault_settings_update_validation_error(
+    vault_browser_client: TestClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """Invalid vault settings should return validation errors."""
+    response = vault_browser_client.put(
+        "/api/v1/vault/settings",
+        headers=auth_headers,
+        json={"inbox": {"folder": "../bad"}},
+    )
+    assert response.status_code == 422
+
+
+def test_vault_settings_update_queues_git(
+    vault_browser_client: TestClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """Git sync should be queued when git is enabled."""
+    from app.services.container import get_container
+
+    container = get_container()
+    git_service = container.git_service
+    git_service.enabled = True
+    git_service.auto_commit_and_push = MagicMock(return_value=True)
+
+    config = VaultConfig()
+    response = vault_browser_client.put(
+        "/api/v1/vault/settings",
+        headers=auth_headers,
+        json=config.model_dump(),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["git_sync_queued"] is True
+    git_service.auto_commit_and_push.assert_called_once()

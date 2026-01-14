@@ -134,7 +134,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
 
     log_service = LogService(
-        logs_dir=vault_service.logs_path(), vault_path=vault_service.vault_path
+        logs_dir=vault_service.logs_path(),
+        vault_path=vault_service.vault_path,
+        vault_service=vault_service,
     )
 
     # Initialize chat session manager (works directly with Claude sessions)

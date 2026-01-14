@@ -5,13 +5,19 @@ This module generates structured audit logs for each processing run,
 providing transparency and debugging information.
 """
 
+from __future__ import annotations
+
 import re
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.exceptions import VaultError
-from app.models.command_run_log import CommandRunGitSummary, CommandRunSummary
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from app.models.command_run_log import CommandRunGitSummary, CommandRunSummary
+    from app.services.vault import VaultService
 
 
 class LogService:
@@ -25,16 +31,29 @@ class LogService:
     - Any errors that occurred
     """
 
-    def __init__(self, logs_dir: Path, vault_path: Path | None = None):
+    def __init__(
+        self,
+        logs_dir: Path,
+        vault_path: Path | None = None,
+        vault_service: VaultService | None = None,
+    ):
         """
         Initialize log service.
 
         Args:
             logs_dir: Absolute path to logs directory
             vault_path: Optional absolute path to vault root (for relative path computation)
+            vault_service: Optional vault service for dynamic log folder updates
         """
         self.logs_dir = logs_dir
         self.vault_path = vault_path
+        self._vault_service = vault_service
+
+    def refresh_logs_dir(self) -> None:
+        """Refresh logs directory from current vault settings."""
+        if self._vault_service is None:
+            return
+        self.logs_dir = self._vault_service.logs_path()
 
     def create_run_log(
         self,
@@ -55,6 +74,7 @@ class LogService:
         Returns:
             Path to created log file (relative to vault root)
         """
+        self.refresh_logs_dir()
         # Create logs directory on-demand
         self.logs_dir.mkdir(parents=True, exist_ok=True)
 
@@ -108,6 +128,7 @@ class LogService:
             Path to created log file (relative to vault root)
         """
         try:
+            self.refresh_logs_dir()
             self.logs_dir.mkdir(parents=True, exist_ok=True)
         except OSError as e:
             message = "Failed to create logs directory"
@@ -197,6 +218,7 @@ class LogService:
         Returns:
             Dict with run metadata or None if no logs exist
         """
+        self.refresh_logs_dir()
         if not self.logs_dir.exists():
             return None
 
