@@ -514,6 +514,7 @@ class AgentSessionManager:
             "type": "chat_complete",
             "session_id": session_id,
             "status": status_value,
+            "deeplink_url": f"prime://chat/session/{session_id}",
         }
 
         for key in ("costUsd", "durationMs"):

@@ -503,6 +503,7 @@ async def test_completion_notification_sent_when_disconnected(
     assert kwargs["data"]["type"] == "chat_complete"
     assert kwargs["data"]["session_id"] == "test-session"
     assert kwargs["data"]["status"] == "success"
+    assert kwargs["data"]["deeplink_url"] == "prime://chat/session/test-session"
     assert kwargs["data"]["costUsd"] == 0.01
     assert kwargs["data"]["durationMs"] == 1000
 
