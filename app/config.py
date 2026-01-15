@@ -195,6 +195,10 @@ class Settings(BaseSettings):
         default=Path("/data/apn/devices.json"),
         description="Path to device tokens file (for backward compatibility)",
     )
+    chat_titles_file: Path = Field(
+        default=Path("/data/chat/titles.json"),
+        description="Path to stored chat titles file",
+    )
 
     @field_validator("vault_repo_url", mode="after")
     @classmethod
@@ -321,8 +325,13 @@ def _build_settings_from_yaml() -> Settings:
     # Data directory
     if "storage" in config_dict and isinstance(config_dict["storage"], dict):
         flat_config["data_path"] = config_dict["storage"].get("data_path", "/data")
+        if "chat_titles_file" in config_dict["storage"]:
+            flat_config["chat_titles_file"] = config_dict["storage"]["chat_titles_file"]
 
     # Create Settings object
+    if "chat_titles_file" not in flat_config:
+        data_path = flat_config.get("data_path", "/data")
+        flat_config["chat_titles_file"] = str(Path(data_path) / "chat" / "titles.json")
     try:
         settings_obj = Settings(**flat_config)
         # Validate CORS configuration

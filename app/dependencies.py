@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.services.agent_identity import AgentIdentityService
     from app.services.agent_session_manager import AgentSessionManager
     from app.services.chat_session_manager import ChatSessionManager
+    from app.services.chat_titles import ChatTitleService
     from app.services.claude_session_api import ClaudeSessionAPI
     from app.services.command_run_manager import CommandRunManager
     from app.services.git import GitService
@@ -103,6 +104,12 @@ async def get_agent_session_manager() -> AgentSessionManager:
     """Get agent session manager via dependency injection."""
     container = get_container()
     return container.agent_session_manager
+
+
+async def get_chat_title_service() -> ChatTitleService:
+    """Get chat title service via dependency injection."""
+    container = get_container()
+    return container.chat_title_service
 
 
 async def get_relay_client() -> PrimePushRelayClient:

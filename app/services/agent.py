@@ -7,6 +7,7 @@ executing vault-scoped commands that can organize and enrich captures.
 
 import asyncio
 import logging
+import re
 from collections.abc import Callable, Coroutine
 from pathlib import Path
 from typing import Any, TypedDict
@@ -131,6 +132,111 @@ class AgentService:
             max_budget_usd=budget,
             model=model,
         )
+
+    def _build_title_options(
+        self, *, max_budget_usd: float, model: str | None = None
+    ) -> ClaudeAgentOptions:
+        """Build ClaudeAgentOptions for chat title generation."""
+        env_dict = {"ANTHROPIC_API_KEY": self.api_key}
+        if self.base_url:
+            env_dict["ANTHROPIC_BASE_URL"] = self.base_url
+
+        return ClaudeAgentOptions(
+            allowed_tools=[],
+            permission_mode="acceptEdits",
+            system_prompt="You generate concise chat titles.",
+            setting_sources=[],
+            cwd=str(self.vault_path),
+            env=env_dict,
+            max_budget_usd=max_budget_usd,
+            model=model,
+        )
+
+    @staticmethod
+    def _sanitize_chat_title(title: str, max_length: int) -> str:
+        cleaned = title.strip()
+        if not cleaned:
+            return ""
+
+        cleaned = cleaned.splitlines()[0]
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        cleaned = cleaned.strip("\"'`")
+        cleaned = cleaned.strip("\u201c\u201d\u2018\u2019")
+        cleaned = cleaned.strip(" .,!?:;")
+
+        if len(cleaned) > max_length:
+            cleaned = cleaned[:max_length].rstrip()
+            cleaned = cleaned.strip(" .,!?:;")
+
+        return cleaned
+
+    async def generate_chat_title(
+        self,
+        prompt: str,
+        *,
+        session_id: str | None = None,
+    ) -> str | None:
+        """Generate a short chat title from the user's first message."""
+        if not prompt or not prompt.strip():
+            logger.warning(
+                "Chat title generation failed",
+                extra={
+                    "issue": "title_generation_failed",
+                    "session_id": session_id,
+                    "error_type": "empty_prompt",
+                },
+            )
+            return None
+
+        title_prompt = (
+            "Generate a short chat title (2-6 words) in the same language as the user message. "
+            "Return only the title, no quotes, no punctuation. User message: "
+            f"{prompt.strip()}"
+        )
+
+        options = self._build_title_options(max_budget_usd=0.01)
+        title_chunks: list[str] = []
+
+        async def _run_generation() -> None:
+            async for message in query(prompt=title_prompt, options=options):
+                if isinstance(message, AssistantMessage):
+                    text_blocks = [
+                        block.text for block in message.content if isinstance(block, TextBlock)
+                    ]
+                    if text_blocks:
+                        title_chunks.extend(text_blocks)
+
+                if isinstance(message, ResultMessage) and message.is_error:
+                    msg = "Title generation failed"
+                    raise RuntimeError(msg)
+
+        try:
+            await asyncio.wait_for(_run_generation(), timeout=20)
+        except Exception as e:
+            logger.exception(
+                "Chat title generation failed",
+                extra={
+                    "issue": "title_generation_failed",
+                    "session_id": session_id,
+                    "error_type": type(e).__name__,
+                },
+            )
+            return None
+
+        raw_title = " ".join(title_chunks)
+        sanitized = self._sanitize_chat_title(raw_title, max_length=80)
+        if not sanitized:
+            logger.warning(
+                "Chat title generation failed",
+                extra={
+                    "issue": "title_generation_failed",
+                    "session_id": session_id,
+                    "error_type": "empty_title",
+                },
+            )
+            return None
+
+        return sanitized
 
     async def _run_prompt(
         self,

@@ -117,6 +117,7 @@ def client(temp_vault, mock_git_service, test_app):
     from app.services.schedule import ScheduleService
     from app.services.push_notifications import PushNotificationService
     from app.services.agent_identity import AgentIdentityService
+    from app.services.chat_titles import ChatTitleService
     from app.config import settings
 
     vault_service = VaultService(str(temp_vault))
@@ -133,6 +134,7 @@ def client(temp_vault, mock_git_service, test_app):
     )
     agent_chat_service = MagicMock(spec=AgentChatService)
     agent_session_manager = MagicMock(spec=AgentSessionManager)
+    chat_title_service = MagicMock(spec=ChatTitleService)
     claude_session_api = MagicMock(spec=ClaudeSessionAPI)
     health_service = HealthCheckService(
         vault_service=vault_service,
@@ -156,6 +158,7 @@ def client(temp_vault, mock_git_service, test_app):
         chat_session_manager=chat_session_manager,
         agent_chat_service=agent_chat_service,
         agent_session_manager=agent_session_manager,
+        chat_title_service=chat_title_service,
         push_notification_service=push_notification_service,
         relay_client=relay_client,
         claude_session_api=claude_session_api,

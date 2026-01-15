@@ -9,7 +9,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api import claude_sessions
-from app.dependencies import get_agent_session_manager, get_claude_session_api
+from app.dependencies import (
+    get_agent_session_manager,
+    get_chat_title_service,
+    get_claude_session_api,
+)
 from app.services.claude_session_api import ClaudeSessionAPI
 from app.utils.path_encoder import encode_project_path
 
@@ -48,10 +52,20 @@ def agent_session_manager() -> MagicMock:
 
 
 @pytest.fixture
+def chat_title_service() -> MagicMock:
+    """Create a mock ChatTitleService."""
+    service = MagicMock()
+    service.get_titles = AsyncMock(return_value={})
+    service.get_title = AsyncMock(return_value=None)
+    return service
+
+
+@pytest.fixture
 def client(
     temp_project_path: Path,
     temp_claude_home: Path,
     agent_session_manager: MagicMock,
+    chat_title_service: MagicMock,
 ) -> TestClient:
     """Create a test client with the Claude sessions router."""
     api = ClaudeSessionAPI(temp_project_path, temp_claude_home)
@@ -59,6 +73,7 @@ def client(
     app.include_router(claude_sessions.router)
     app.dependency_overrides[get_claude_session_api] = lambda: api
     app.dependency_overrides[get_agent_session_manager] = lambda: agent_session_manager
+    app.dependency_overrides[get_chat_title_service] = lambda: chat_title_service
     return TestClient(app)
 
 
@@ -120,6 +135,7 @@ def test_list_sessions_cursor_pagination(
     ]
     assert all("is_running" in session for session in payload["sessions"])
     assert all(session["is_running"] is False for session in payload["sessions"])
+    assert all(session["title"] == session["summary"] for session in payload["sessions"])
 
     response2 = client.get(
         "/api/v1/claude-sessions",
@@ -134,6 +150,7 @@ def test_list_sessions_cursor_pagination(
     assert [session["session_id"] for session in payload2["sessions"]] == ["session-0"]
     assert all("is_running" in session for session in payload2["sessions"])
     assert all(session["is_running"] is False for session in payload2["sessions"])
+    assert all(session["title"] == session["summary"] for session in payload2["sessions"])
 
 
 def test_list_sessions_invalid_cursor(client: TestClient) -> None:
@@ -179,6 +196,7 @@ def test_list_sessions_query_with_cursor(
     assert [session["session_id"] for session in payload["sessions"]] == ["alpha-1"]
     assert all("is_running" in session for session in payload["sessions"])
     assert all(session["is_running"] is False for session in payload["sessions"])
+    assert all(session["title"] == session["summary"] for session in payload["sessions"])
 
     response2 = client.get(
         "/api/v1/claude-sessions",
@@ -193,6 +211,7 @@ def test_list_sessions_query_with_cursor(
     assert [session["session_id"] for session in payload2["sessions"]] == ["alpha-0"]
     assert all("is_running" in session for session in payload2["sessions"])
     assert all(session["is_running"] is False for session in payload2["sessions"])
+    assert all(session["title"] == session["summary"] for session in payload2["sessions"])
 
 
 def test_list_sessions_running_flag(
@@ -224,3 +243,32 @@ def test_list_sessions_running_flag(
     }
     assert running_flags["session-2"] is True
     assert running_flags["session-1"] is False
+
+
+def test_list_sessions_uses_stored_title(
+    client: TestClient,
+    sessions_dir: Path,
+    chat_title_service: MagicMock,
+) -> None:
+    create_test_session(
+        sessions_dir,
+        "session-1",
+        "Session 1",
+        "2025-12-28T11:00:00.000Z",
+    )
+    create_test_session(
+        sessions_dir,
+        "session-2",
+        "Session 2",
+        "2025-12-28T12:00:00.000Z",
+    )
+
+    chat_title_service.get_titles.return_value = {"session-2": "Stored Title"}
+
+    response = client.get("/api/v1/claude-sessions")
+    assert response.status_code == 200
+    payload = response.json()
+
+    titles = {session["session_id"]: session["title"] for session in payload["sessions"]}
+    assert titles["session-2"] == "Stored Title"
+    assert titles["session-1"] == "Session 1"

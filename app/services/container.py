@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from app.services.agent_identity import AgentIdentityService
     from app.services.agent_session_manager import AgentSessionManager
     from app.services.chat_session_manager import ChatSessionManager
+    from app.services.chat_titles import ChatTitleService
     from app.services.claude_session_api import ClaudeSessionAPI
     from app.services.command import CommandService
     from app.services.command_run_manager import CommandRunManager
@@ -47,6 +48,7 @@ class ServiceContainer:
         chat_session_manager: ChatSessionManager,
         agent_chat_service: AgentChatService,
         agent_session_manager: AgentSessionManager,
+        chat_title_service: ChatTitleService,
         push_notification_service: PushNotificationService,
         relay_client: PrimePushRelayClient,
         claude_session_api: ClaudeSessionAPI,
@@ -66,6 +68,7 @@ class ServiceContainer:
         self.chat_session_manager = chat_session_manager
         self.agent_chat_service = agent_chat_service
         self.agent_session_manager = agent_session_manager
+        self.chat_title_service = chat_title_service
         self.push_notification_service = push_notification_service
         self.relay_client = relay_client
         self.claude_session_api = claude_session_api
@@ -88,6 +91,7 @@ def init_container(
     chat_session_manager: ChatSessionManager,
     agent_chat_service: AgentChatService,
     agent_session_manager: AgentSessionManager,
+    chat_title_service: ChatTitleService,
     push_notification_service: PushNotificationService,
     relay_client: PrimePushRelayClient,
     claude_session_api: ClaudeSessionAPI,
@@ -110,6 +114,7 @@ def init_container(
         chat_session_manager: ChatSessionManager for managing chat sessions
         agent_chat_service: AgentChatService for agent chat operations
         agent_session_manager: AgentSessionManager for managing agent sessions
+        chat_title_service: ChatTitleService for stored chat titles
         push_notification_service: PushNotificationService for push notifications
         relay_client: PrimePushRelayClient for push notifications
         claude_session_api: ClaudeSessionAPI for Claude session access
@@ -136,6 +141,7 @@ def init_container(
         chat_session_manager=chat_session_manager,
         agent_chat_service=agent_chat_service,
         agent_session_manager=agent_session_manager,
+        chat_title_service=chat_title_service,
         push_notification_service=push_notification_service,
         relay_client=relay_client,
         claude_session_api=claude_session_api,

@@ -22,6 +22,23 @@ def mock_agent_service():
 
 
 @pytest.fixture
+def mock_title_agent_service():
+    """Create mock AgentService for title generation."""
+    service = Mock()
+    service.generate_chat_title = AsyncMock(return_value="Test title")
+    return service
+
+
+@pytest.fixture
+def mock_chat_title_service():
+    """Create mock ChatTitleService."""
+    service = Mock()
+    service.title_exists = AsyncMock(return_value=False)
+    service.set_title = AsyncMock()
+    return service
+
+
+@pytest.fixture
 def mock_push_notification_service():
     """Create mock PushNotificationService."""
     service = MagicMock()
@@ -55,10 +72,17 @@ def mock_connection_manager():
 
 
 @pytest.fixture
-async def session_manager(mock_agent_service, mock_push_notification_service):
+async def session_manager(
+    mock_agent_service,
+    mock_push_notification_service,
+    mock_title_agent_service,
+    mock_chat_title_service,
+):
     """Create AgentSessionManager instance."""
     manager = AgentSessionManager(
         agent_service=mock_agent_service,
+        title_agent_service=mock_title_agent_service,
+        chat_title_service=mock_chat_title_service,
         push_notification_service=mock_push_notification_service,
     )
     yield manager
@@ -151,6 +175,64 @@ async def test_session_rekey_on_session_id_event(session_manager, mock_agent_ser
     assert "real-session-id" in session_manager.sessions
     assert pending_id not in session_manager.sessions
     assert state.session_id == "real-session-id"
+
+
+@pytest.mark.asyncio
+async def test_title_generation_triggered_once_on_new_session(
+    session_manager,
+    mock_agent_service,
+    mock_client,
+    mock_title_agent_service,
+    mock_chat_title_service,
+):
+    """Trigger title generation once after rekey for new sessions."""
+    mock_agent_service.create_client_instance.return_value = mock_client
+
+    async def _message_stream(_client, _message):
+        yield {"type": "session_id", "session_id": "real-session-id"}
+        yield {"type": "complete", "status": "success", "cost_usd": 0.01, "duration_ms": 1000}
+
+    mock_agent_service.process_message_stream = _message_stream
+
+    state = await session_manager.get_or_create_session(None)
+    queued = await session_manager.send_user_message(state.session_id, "first message")
+    assert queued
+
+    await asyncio.sleep(0.1)
+    queued = await session_manager.send_user_message(state.session_id, "second message")
+    assert queued
+
+    await asyncio.sleep(0.1)
+
+    assert mock_title_agent_service.generate_chat_title.await_count == 1
+    mock_chat_title_service.set_title.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_title_generation_not_triggered_on_resume(
+    session_manager,
+    mock_agent_service,
+    mock_client,
+    mock_title_agent_service,
+    mock_chat_title_service,
+):
+    """Skip title generation when resuming an existing session."""
+    mock_agent_service.create_client_instance.return_value = mock_client
+
+    async def _message_stream(_client, _message):
+        yield {"type": "session_id", "session_id": "existing-session"}
+        yield {"type": "complete", "status": "success", "cost_usd": 0.01, "duration_ms": 1000}
+
+    mock_agent_service.process_message_stream = _message_stream
+
+    state = await session_manager.get_or_create_session("existing-session")
+    queued = await session_manager.send_user_message(state.session_id, "test message")
+    assert queued
+
+    await asyncio.sleep(0.1)
+
+    assert mock_title_agent_service.generate_chat_title.await_count == 0
+    assert mock_chat_title_service.set_title.await_count == 0
 
 
 @pytest.mark.asyncio

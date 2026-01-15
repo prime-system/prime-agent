@@ -22,7 +22,10 @@ from claude_agent_sdk.types import (
     ToolPermissionContext,
 )
 
+from app.services.agent import AgentService
 from app.services.agent_chat import AgentChatService
+from app.services.background_tasks import safe_background_task
+from app.services.chat_titles import ChatTitleService
 from app.services.push_notifications import PushNotificationService
 
 logger = logging.getLogger(__name__)
@@ -60,6 +63,9 @@ class AgentSessionState:
     pending_answer_future: asyncio.Future[AskUserResponsePayload] | None = None
     pending_question_started_at: float | None = None
     waiting_for_user: bool = False
+    is_new_session: bool = False
+    first_user_message: str | None = None
+    title_task_started: bool = False
 
 
 class AgentSessionManager:
@@ -82,6 +88,8 @@ class AgentSessionManager:
     def __init__(
         self,
         agent_service: AgentChatService,
+        title_agent_service: AgentService,
+        chat_title_service: ChatTitleService,
         push_notification_service: PushNotificationService,
     ):
         """
@@ -89,9 +97,13 @@ class AgentSessionManager:
 
         Args:
             agent_service: AgentChatService for creating SDK clients
+            title_agent_service: AgentService for generating chat titles
+            chat_title_service: ChatTitleService for storing titles
             push_notification_service: PushNotificationService for completion notifications
         """
         self.agent_service = agent_service
+        self.title_agent_service = title_agent_service
+        self.chat_title_service = chat_title_service
         self.push_notification_service = push_notification_service
         self.sessions: dict[str, AgentSessionState] = {}
         self._lock = asyncio.Lock()
@@ -142,6 +154,7 @@ class AgentSessionManager:
 
             # Ensure new sessions have unique temporary IDs
             temp_session_id = session_id or self._generate_pending_session_id()
+            is_new_session = session_id is None
 
             state_ref: dict[str, AgentSessionState] = {}
             can_use_tool = self._build_can_use_tool_handler(state_ref)
@@ -162,6 +175,7 @@ class AgentSessionManager:
                 client=client,
                 processing_task=processing_task,
                 input_queue=input_queue,
+                is_new_session=is_new_session,
             )
             state_ref["state"] = temp_state
 
@@ -487,6 +501,8 @@ class AgentSessionManager:
 
                     if state:
                         state.is_processing = True
+                        if state.first_user_message is None:
+                            state.first_user_message = user_message
 
                     logger.info("Processing message for session %s", session_id)
 
@@ -500,6 +516,7 @@ class AgentSessionManager:
                             if new_session_id and new_session_id != session_id and state:
                                 logger.info("Session ID captured: %s", new_session_id)
                                 session_id = await self._rekey_session(state, new_session_id)
+                                self._maybe_start_title_task(state)
 
                         # Update activity
                         if state:
@@ -575,6 +592,55 @@ class AgentSessionManager:
         """Buffer event for later replay."""
         async with state.ws_lock:
             state.message_buffer.append(event)
+
+    def _maybe_start_title_task(self, state: AgentSessionState) -> None:
+        """Start background title generation for new sessions."""
+        if not state.is_new_session or state.title_task_started:
+            return
+        if not state.first_user_message:
+            return
+
+        state.title_task_started = True
+        session_id = state.session_id
+        first_message = state.first_user_message
+
+        async def _run_title_task() -> None:
+            if await self.chat_title_service.title_exists(session_id):
+                return
+
+            title = await self.title_agent_service.generate_chat_title(
+                first_message,
+                session_id=session_id,
+            )
+            source: Literal["generated", "fallback"] = "generated"
+            if not title:
+                title = self._fallback_title(first_message)
+                source = "fallback"
+
+            if not title:
+                return
+
+            created_at = datetime.now(UTC).isoformat()
+            await self.chat_title_service.set_title(
+                session_id,
+                title,
+                created_at,
+                source=source,
+            )
+
+        asyncio.create_task(
+            safe_background_task(f"chat_title_generation:{session_id}", _run_title_task)
+        )
+
+    @staticmethod
+    def _fallback_title(prompt: str, max_length: int = 80) -> str | None:
+        """Build a fallback title from the first user prompt."""
+        cleaned = " ".join(prompt.split())
+        if not cleaned:
+            return None
+        if len(cleaned) > max_length:
+            cleaned = cleaned[:max_length].rstrip()
+        return cleaned
 
     async def _handle_completion_event(
         self,

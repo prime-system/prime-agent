@@ -24,12 +24,13 @@ from app.api import (
 from app.config import settings
 from app.logging_config import configure_json_logging
 from app.middleware.request_id import RequestIDMiddleware
-from app.services import agent_identity, device_registry
+from app.services import agent_identity, chat_titles, device_registry
 from app.services.agent import AgentService
 from app.services.agent_chat import AgentChatService
 from app.services.agent_identity import AgentIdentityService
 from app.services.agent_session_manager import AgentSessionManager
 from app.services.chat_session_manager import ChatSessionManager
+from app.services.chat_titles import ChatTitleService
 from app.services.claude_session_api import ClaudeSessionAPI
 from app.services.command import CommandService
 from app.services.command_run_manager import CommandRunManager
@@ -102,6 +103,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await init_vault_lock()
     await device_registry.init_file_lock()
     await agent_identity.init_file_lock()
+    await chat_titles.init_file_lock()
 
     # Initialize services
     vault_service = VaultService(settings.vault_path)
@@ -169,9 +171,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         relay_client=relay_client,
     )
 
+    # Initialize chat title service
+    chat_title_service = ChatTitleService(settings.chat_titles_file)
+
     # Initialize AgentSessionManager
     agent_session_manager = AgentSessionManager(
         agent_service=agent_chat_service,
+        title_agent_service=agent_service,
+        chat_title_service=chat_title_service,
         push_notification_service=push_notification_service,
     )
     agent_session_manager.start_cleanup_loop()
@@ -219,6 +226,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         chat_session_manager=chat_session_manager,
         agent_chat_service=agent_chat_service,
         agent_session_manager=agent_session_manager,
+        chat_title_service=chat_title_service,
         push_notification_service=push_notification_service,
         relay_client=relay_client,
         claude_session_api=claude_session_api,

@@ -66,8 +66,15 @@ def test_websocket_connected_session_id_and_complete():
 
     mock_push_notification_service = MagicMock()
     mock_push_notification_service.send_notification = AsyncMock()
+    mock_title_agent_service = MagicMock()
+    mock_title_agent_service.generate_chat_title = AsyncMock(return_value="Test title")
+    mock_chat_title_service = MagicMock()
+    mock_chat_title_service.title_exists = AsyncMock(return_value=True)
+    mock_chat_title_service.set_title = AsyncMock()
     agent_session_manager = AgentSessionManager(
         agent_service=mock_agent_service,
+        title_agent_service=mock_title_agent_service,
+        chat_title_service=mock_chat_title_service,
         push_notification_service=mock_push_notification_service,
     )
     mock_chat_session_manager = MagicMock()
@@ -120,8 +127,15 @@ def test_websocket_error_is_permanent():
 
     mock_push_notification_service = MagicMock()
     mock_push_notification_service.send_notification = AsyncMock()
+    mock_title_agent_service = MagicMock()
+    mock_title_agent_service.generate_chat_title = AsyncMock(return_value="Test title")
+    mock_chat_title_service = MagicMock()
+    mock_chat_title_service.title_exists = AsyncMock(return_value=True)
+    mock_chat_title_service.set_title = AsyncMock()
     agent_session_manager = AgentSessionManager(
         agent_service=mock_agent_service,
+        title_agent_service=mock_title_agent_service,
+        chat_title_service=mock_chat_title_service,
         push_notification_service=mock_push_notification_service,
     )
     mock_chat_session_manager = MagicMock()
@@ -163,8 +177,15 @@ def test_websocket_reconnect_replays_complete_event():
 
     mock_push_notification_service = MagicMock()
     mock_push_notification_service.send_notification = AsyncMock()
+    mock_title_agent_service = MagicMock()
+    mock_title_agent_service.generate_chat_title = AsyncMock(return_value="Test title")
+    mock_chat_title_service = MagicMock()
+    mock_chat_title_service.title_exists = AsyncMock(return_value=True)
+    mock_chat_title_service.set_title = AsyncMock()
     agent_session_manager = AgentSessionManager(
         agent_service=mock_agent_service,
+        title_agent_service=mock_title_agent_service,
+        chat_title_service=mock_chat_title_service,
         push_notification_service=mock_push_notification_service,
     )
     mock_chat_session_manager = MagicMock()

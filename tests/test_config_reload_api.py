@@ -89,6 +89,7 @@ def client(temp_config_file, temp_vault, test_app, monkeypatch):
         chat_session_manager=MagicMock(),
         agent_chat_service=MagicMock(),
         agent_session_manager=MagicMock(),
+        chat_title_service=MagicMock(),
         push_notification_service=MagicMock(spec=PushNotificationService),
         relay_client=MagicMock(spec=PrimePushRelayClient),
         claude_session_api=MagicMock(),

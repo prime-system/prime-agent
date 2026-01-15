@@ -7,8 +7,13 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
-from app.dependencies import get_agent_session_manager, get_claude_session_api
+from app.dependencies import (
+    get_agent_session_manager,
+    get_chat_title_service,
+    get_claude_session_api,
+)
 from app.services.agent_session_manager import AgentSessionManager
+from app.services.chat_titles import ChatTitleService
 from app.services.claude_session_api import ClaudeSessionAPI
 from app.utils.claude_session_pagination import paginate_sessions
 from app.utils.pagination import PaginationError
@@ -24,6 +29,7 @@ class SessionListItem(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     session_id: str
+    title: str | None
     summary: str | None
     is_agent_session: bool
     created_at: str | None
@@ -46,6 +52,7 @@ class SessionDetailResponse(BaseModel):
     """Response model for session detail."""
 
     session_id: str
+    title: str | None
     summary: str | None
     is_agent_session: bool
     created_at: str | None
@@ -73,6 +80,7 @@ async def list_sessions(
     cursor: str | None = Query(None, description="Opaque cursor for pagination"),
     claude_session_api: ClaudeSessionAPI = Depends(get_claude_session_api),
     agent_session_manager: AgentSessionManager = Depends(get_agent_session_manager),
+    chat_title_service: ChatTitleService = Depends(get_chat_title_service),
 ) -> SessionListResponse | JSONResponse:
     """
     List available Claude Code sessions.
@@ -114,10 +122,21 @@ async def list_sessions(
         )
 
     running_ids = await agent_session_manager.get_running_session_ids()
-    session_items = [
-        SessionListItem(**{**session, "is_running": session.get("session_id") in running_ids})
-        for session in page
-    ]
+    titles = await chat_title_service.get_titles([session["session_id"] for session in page])
+    session_items: list[SessionListItem] = []
+    for session in page:
+        session_id = session.get("session_id")
+        title = titles.get(session_id) if isinstance(session_id, str) else None
+        is_running = session_id in running_ids if isinstance(session_id, str) else False
+        session_items.append(
+            SessionListItem(
+                **{
+                    **session,
+                    "title": title or session.get("summary") or None,
+                    "is_running": is_running,
+                }
+            )
+        )
 
     has_more = next_cursor is not None
     logger.info(
@@ -141,6 +160,7 @@ async def list_sessions(
 async def get_session(
     session_id: str = Path(..., description="Session UUID or agent ID"),
     claude_session_api: ClaudeSessionAPI = Depends(get_claude_session_api),
+    chat_title_service: ChatTitleService = Depends(get_chat_title_service),
 ) -> SessionDetailResponse:
     """
     Get complete session data including all messages.
@@ -175,7 +195,13 @@ async def get_session(
         "Retrieved Claude session %s with %d messages", validated_id, session["message_count"]
     )
 
-    return SessionDetailResponse(**session)
+    title = await chat_title_service.get_title(validated_id)
+    return SessionDetailResponse(
+        **{
+            **session,
+            "title": title or session.get("summary") or None,
+        }
+    )
 
 
 @router.get("/{session_id}/messages", response_model=MessageListResponse)
