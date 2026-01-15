@@ -88,6 +88,21 @@ async def test_create_session(session_manager, mock_agent_service, mock_client):
 
 
 @pytest.mark.asyncio
+async def test_get_running_session_ids(session_manager, mock_agent_service, mock_client):
+    """Test reporting running session IDs."""
+    mock_agent_service.create_client_instance.return_value = mock_client
+
+    await session_manager.get_or_create_session("running-session")
+    running_ids = await session_manager.get_running_session_ids()
+
+    assert "running-session" in running_ids
+
+    await session_manager.terminate_session("running-session")
+    running_ids_after = await session_manager.get_running_session_ids()
+    assert "running-session" not in running_ids_after
+
+
+@pytest.mark.asyncio
 async def test_pending_session_ids_are_unique(session_manager, mock_agent_service, mock_client):
     """Test that new sessions use unique pending IDs."""
     mock_agent_service.create_client_instance.return_value = mock_client

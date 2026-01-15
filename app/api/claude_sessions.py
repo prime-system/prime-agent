@@ -5,9 +5,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
-from app.dependencies import get_claude_session_api
+from app.dependencies import get_agent_session_manager, get_claude_session_api
+from app.services.agent_session_manager import AgentSessionManager
 from app.services.claude_session_api import ClaudeSessionAPI
 from app.utils.claude_session_pagination import paginate_sessions
 from app.utils.pagination import PaginationError
@@ -17,10 +18,25 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/claude-sessions", tags=["claude-sessions"])
 
 
+class SessionListItem(BaseModel):
+    """Response model for session list items."""
+
+    model_config = ConfigDict(extra="allow")
+
+    session_id: str
+    summary: str | None
+    is_agent_session: bool
+    created_at: str | None
+    last_activity: str | None
+    message_count: int
+    file_path: str
+    is_running: bool
+
+
 class SessionListResponse(BaseModel):
     """Response model for session list."""
 
-    sessions: list[dict[str, Any]]
+    sessions: list[SessionListItem]
     total: int
     next_cursor: str | None = None
     has_more: bool = False
@@ -56,6 +72,7 @@ async def list_sessions(
     query: str | None = Query(None, description="Search query for session summaries"),
     cursor: str | None = Query(None, description="Opaque cursor for pagination"),
     claude_session_api: ClaudeSessionAPI = Depends(get_claude_session_api),
+    agent_session_manager: AgentSessionManager = Depends(get_agent_session_manager),
 ) -> SessionListResponse | JSONResponse:
     """
     List available Claude Code sessions.
@@ -96,6 +113,12 @@ async def list_sessions(
             content={"error": "InvalidCursor", "message": str(exc)},
         )
 
+    running_ids = await agent_session_manager.get_running_session_ids()
+    session_items = [
+        SessionListItem(**{**session, "is_running": session.get("session_id") in running_ids})
+        for session in page
+    ]
+
     has_more = next_cursor is not None
     logger.info(
         "Listed Claude sessions",
@@ -107,7 +130,7 @@ async def list_sessions(
     )
 
     return SessionListResponse(
-        sessions=page,
+        sessions=session_items,
         total=len(page),
         next_cursor=next_cursor,
         has_more=has_more,

@@ -87,6 +87,15 @@ class AgentSessionManager:
             return False
         return session_id in self.sessions
 
+    async def get_running_session_ids(self) -> set[str]:
+        """Return session IDs with active processing tasks."""
+        async with self._lock:
+            return {
+                session_id
+                for session_id, state in self.sessions.items()
+                if not state.processing_task.done()
+            }
+
     async def get_or_create_session(self, session_id: str | None) -> AgentSessionState:
         """
         Get existing session or create new one.

@@ -2,13 +2,14 @@
 
 import json
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api import claude_sessions
-from app.dependencies import get_claude_session_api
+from app.dependencies import get_agent_session_manager, get_claude_session_api
 from app.services.claude_session_api import ClaudeSessionAPI
 from app.utils.path_encoder import encode_project_path
 
@@ -39,12 +40,25 @@ def sessions_dir(temp_claude_home: Path, temp_project_path: Path) -> Path:
 
 
 @pytest.fixture
-def client(temp_project_path: Path, temp_claude_home: Path) -> TestClient:
+def agent_session_manager() -> MagicMock:
+    """Create a mock AgentSessionManager."""
+    manager = MagicMock()
+    manager.get_running_session_ids = AsyncMock(return_value=set())
+    return manager
+
+
+@pytest.fixture
+def client(
+    temp_project_path: Path,
+    temp_claude_home: Path,
+    agent_session_manager: MagicMock,
+) -> TestClient:
     """Create a test client with the Claude sessions router."""
     api = ClaudeSessionAPI(temp_project_path, temp_claude_home)
     app = FastAPI()
     app.include_router(claude_sessions.router)
     app.dependency_overrides[get_claude_session_api] = lambda: api
+    app.dependency_overrides[get_agent_session_manager] = lambda: agent_session_manager
     return TestClient(app)
 
 
@@ -104,6 +118,8 @@ def test_list_sessions_cursor_pagination(
         "session-2",
         "session-1",
     ]
+    assert all("is_running" in session for session in payload["sessions"])
+    assert all(session["is_running"] is False for session in payload["sessions"])
 
     response2 = client.get(
         "/api/v1/claude-sessions",
@@ -116,6 +132,8 @@ def test_list_sessions_cursor_pagination(
     assert payload2["has_more"] is False
     assert payload2["next_cursor"] is None
     assert [session["session_id"] for session in payload2["sessions"]] == ["session-0"]
+    assert all("is_running" in session for session in payload2["sessions"])
+    assert all(session["is_running"] is False for session in payload2["sessions"])
 
 
 def test_list_sessions_invalid_cursor(client: TestClient) -> None:
@@ -159,6 +177,8 @@ def test_list_sessions_query_with_cursor(
     assert payload["has_more"] is True
     assert payload["next_cursor"] is not None
     assert [session["session_id"] for session in payload["sessions"]] == ["alpha-1"]
+    assert all("is_running" in session for session in payload["sessions"])
+    assert all(session["is_running"] is False for session in payload["sessions"])
 
     response2 = client.get(
         "/api/v1/claude-sessions",
@@ -171,3 +191,36 @@ def test_list_sessions_query_with_cursor(
     assert payload2["has_more"] is False
     assert payload2["next_cursor"] is None
     assert [session["session_id"] for session in payload2["sessions"]] == ["alpha-0"]
+    assert all("is_running" in session for session in payload2["sessions"])
+    assert all(session["is_running"] is False for session in payload2["sessions"])
+
+
+def test_list_sessions_running_flag(
+    client: TestClient,
+    sessions_dir: Path,
+    agent_session_manager: MagicMock,
+) -> None:
+    create_test_session(
+        sessions_dir,
+        "session-1",
+        "Session 1",
+        "2025-12-28T11:00:00.000Z",
+    )
+    create_test_session(
+        sessions_dir,
+        "session-2",
+        "Session 2",
+        "2025-12-28T12:00:00.000Z",
+    )
+
+    agent_session_manager.get_running_session_ids.return_value = {"session-2"}
+
+    response = client.get("/api/v1/claude-sessions")
+    assert response.status_code == 200
+    payload = response.json()
+
+    running_flags = {
+        session["session_id"]: session["is_running"] for session in payload["sessions"]
+    }
+    assert running_flags["session-2"] is True
+    assert running_flags["session-1"] is False
