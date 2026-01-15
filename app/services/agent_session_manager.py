@@ -7,18 +7,35 @@ enabling sessions to persist across reconnections.
 
 import asyncio
 import logging
+import time
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal, TypedDict
 from uuid import uuid4
 
 from claude_agent_sdk import ClaudeSDKClient
+from claude_agent_sdk.types import (
+    CanUseTool,
+    PermissionResultAllow,
+    PermissionResultDeny,
+    ToolPermissionContext,
+)
 
 from app.services.agent_chat import AgentChatService
 from app.services.push_notifications import PushNotificationService
 
 logger = logging.getLogger(__name__)
+
+
+class AskUserResponsePayload(TypedDict):
+    """Response payload for AskUserQuestion answers."""
+
+    answers: dict[str, str | list[str]]
+    cancelled: bool
+
+
+AskUserResponseOutcome = Literal["accepted", "invalid", "ignored", "session_taken"]
 
 
 @dataclass
@@ -38,6 +55,11 @@ class AgentSessionState:
     is_processing: bool = False
     replay_in_progress: bool = False
     ws_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    pending_question_id: str | None = None
+    pending_question: dict[str, Any] | None = None
+    pending_answer_future: asyncio.Future[AskUserResponsePayload] | None = None
+    pending_question_started_at: float | None = None
+    waiting_for_user: bool = False
 
 
 class AgentSessionManager:
@@ -55,6 +77,7 @@ class AgentSessionManager:
 
     TIMEOUT_SECONDS = 1800  # 30 minutes
     GRACE_PERIOD_SECONDS = 5  # After completion, wait before notification
+    ASK_USER_TIMEOUT_SECONDS = 55
 
     def __init__(
         self,
@@ -120,8 +143,14 @@ class AgentSessionManager:
             # Ensure new sessions have unique temporary IDs
             temp_session_id = session_id or self._generate_pending_session_id()
 
+            state_ref: dict[str, AgentSessionState] = {}
+            can_use_tool = self._build_can_use_tool_handler(state_ref)
+
             # Create long-lived ClaudeSDKClient
-            client = self.agent_service.create_client_instance(session_id=session_id)
+            client = self.agent_service.create_client_instance(
+                session_id=session_id,
+                can_use_tool=can_use_tool,
+            )
 
             # Create state
             input_queue: asyncio.Queue[str] = asyncio.Queue()
@@ -134,6 +163,7 @@ class AgentSessionManager:
                 processing_task=processing_task,
                 input_queue=input_queue,
             )
+            state_ref["state"] = temp_state
 
             # Always add to sessions dict (will be moved to actual ID later)
             self.sessions[temp_session_id] = temp_state
@@ -184,6 +214,12 @@ class AgentSessionManager:
 
         if terminal_event and not any(event == terminal_event for event in buffered):
             buffered.append(terminal_event)
+
+        async with state.ws_lock:
+            pending_question = state.pending_question if state.waiting_for_user else None
+
+        if pending_question and not any(event == pending_question for event in buffered):
+            buffered.append(pending_question)
 
         # Kick previous client if exists
         if previous_ws_id:
@@ -297,6 +333,71 @@ class AgentSessionManager:
         state.last_activity = datetime.now(UTC)
         logger.debug("Queued message for session %s", session_id)
         return True
+
+    async def submit_ask_user_response(
+        self,
+        session_id: str,
+        question_id: str,
+        answers: dict[str, str | list[str]],
+        *,
+        cancelled: bool = False,
+        ws_id: str | None = None,
+        connection_manager: Any | None = None,
+    ) -> tuple[AskUserResponseOutcome, str | None]:
+        """
+        Submit a response for a pending AskUserQuestion.
+
+        Returns an outcome status and optional error message.
+        """
+        state = self.sessions.get(session_id)
+        if not state:
+            logger.warning("AskUser response received for unknown session %s", session_id)
+            return "ignored", None
+
+        if ws_id is not None:
+            async with state.ws_lock:
+                active_ws_id = state.connected_ws_id
+
+            if active_ws_id != ws_id:
+                logger.warning(
+                    "Rejected AskUser response from non-active WebSocket %s (active=%s)",
+                    ws_id,
+                    active_ws_id,
+                )
+                if connection_manager:
+                    await connection_manager.send_message(
+                        ws_id,
+                        {"type": "session_taken"},
+                    )
+                    await connection_manager.disconnect(ws_id)
+                return "session_taken", None
+
+        async with state.ws_lock:
+            waiting_for_user = state.waiting_for_user
+            pending_question_id = state.pending_question_id
+            pending_future = state.pending_answer_future
+
+        if not waiting_for_user or not pending_question_id or not pending_future:
+            return "ignored", None
+
+        if question_id != pending_question_id:
+            return "invalid", "Question ID does not match pending question"
+
+        if pending_future.done():
+            return "ignored", None
+
+        if not cancelled:
+            error = self._validate_ask_user_answers(answers)
+            if error:
+                return "invalid", error
+
+        pending_future.set_result(
+            {
+                "answers": answers,
+                "cancelled": cancelled,
+            }
+        )
+        return "accepted", None
 
     async def terminate_session(self, session_id: str) -> None:
         """
@@ -562,6 +663,8 @@ class AgentSessionManager:
                 self.sessions.pop(state.session_id, None)
 
         async with state.ws_lock:
+            if state.pending_answer_future and not state.pending_answer_future.done():
+                state.pending_answer_future.cancel()
             ws_id = state.connected_ws_id
             state.connected_ws_id = None
             state.replay_in_progress = False
@@ -608,6 +711,161 @@ class AgentSessionManager:
             await self._terminate_state(collision_state)
 
         return new_session_id
+
+    def _build_can_use_tool_handler(self, state_ref: dict[str, AgentSessionState]) -> CanUseTool:
+        """Build can_use_tool handler with access to mutable state reference."""
+
+        async def _can_use_tool(
+            tool_name: str,
+            tool_input: dict[str, Any],
+            context: ToolPermissionContext,
+        ) -> PermissionResultAllow | PermissionResultDeny:
+            state = state_ref.get("state")
+            if not state:
+                logger.warning("can_use_tool invoked without session state")
+                return PermissionResultDeny(message="Session not ready", interrupt=True)
+
+            if tool_name != "AskUserQuestion":
+                return PermissionResultAllow(updated_permissions=context.suggestions)
+
+            return await self._handle_ask_user_question(state, tool_input)
+
+        return _can_use_tool
+
+    async def _handle_ask_user_question(
+        self,
+        state: AgentSessionState,
+        tool_input: dict[str, Any],
+    ) -> PermissionResultAllow | PermissionResultDeny:
+        """Handle AskUserQuestion tool requests by bridging to WebSocket."""
+        questions_value = tool_input.get("questions")
+        questions: list[dict[str, Any]]
+        if isinstance(questions_value, list):
+            questions = [item for item in questions_value if isinstance(item, dict)]
+        else:
+            questions = []
+
+        question_id = f"q_{uuid4().hex}"
+        timeout_seconds = self.ASK_USER_TIMEOUT_SECONDS
+        event = {
+            "type": "ask_user_question",
+            "question_id": question_id,
+            "questionId": question_id,
+            "questions": questions,
+            "timeout_seconds": timeout_seconds,
+        }
+
+        loop = asyncio.get_running_loop()
+        answer_future: asyncio.Future[AskUserResponsePayload] = loop.create_future()
+
+        async with state.ws_lock:
+            if state.pending_answer_future and not state.pending_answer_future.done():
+                return PermissionResultDeny(
+                    message="Another user question is already pending",
+                    interrupt=True,
+                )
+            state.pending_answer_future = answer_future
+            state.pending_question_id = question_id
+            state.pending_question = event
+            state.pending_question_started_at = time.monotonic()
+            state.waiting_for_user = True
+
+        await self._dispatch_event(state, event)
+
+        logger.info(
+            "ask_user_question_sent",
+            extra={
+                "session_id": state.session_id,
+                "question_id": question_id,
+                "timeout_seconds": timeout_seconds,
+            },
+        )
+
+        try:
+            response = await asyncio.wait_for(answer_future, timeout=timeout_seconds)
+        except TimeoutError:
+            await self._handle_ask_user_timeout(state, question_id)
+            await self._clear_pending_question(state, question_id)
+            return PermissionResultDeny(message="User response timeout", interrupt=True)
+
+        duration_seconds = self._get_pending_duration(state)
+        await self._clear_pending_question(state, question_id)
+        logger.info(
+            "ask_user_answer_received",
+            extra={
+                "session_id": state.session_id,
+                "question_id": question_id,
+                "duration_seconds": duration_seconds,
+            },
+        )
+
+        if response["cancelled"]:
+            return PermissionResultDeny(message="User cancelled question", interrupt=True)
+
+        normalized_answers = self._normalize_ask_user_answers(response["answers"])
+        updated_input = {**tool_input, "questions": questions, "answers": normalized_answers}
+        return PermissionResultAllow(updated_input=updated_input)
+
+    def _validate_ask_user_answers(self, answers: dict[str, str | list[str]]) -> str | None:
+        """Validate ask_user_response answers payload."""
+        for key, value in answers.items():
+            if not isinstance(key, str):
+                return "Answer keys must be strings"
+            if isinstance(value, list):
+                if not all(isinstance(item, str) for item in value):
+                    return "Answer list values must be strings"
+            elif not isinstance(value, str):
+                return "Answer values must be strings"
+        return None
+
+    def _normalize_ask_user_answers(
+        self,
+        answers: dict[str, str | list[str]],
+    ) -> dict[str, str]:
+        """Normalize AskUserQuestion answers into comma-separated strings."""
+        normalized: dict[str, str] = {}
+        for question_text, value in answers.items():
+            if isinstance(value, list):
+                normalized[question_text] = ", ".join(value)
+            else:
+                normalized[question_text] = value
+        return normalized
+
+    def _get_pending_duration(self, state: AgentSessionState) -> float | None:
+        """Return duration for pending question if start time is recorded."""
+        if state.pending_question_started_at is None:
+            return None
+        return time.monotonic() - state.pending_question_started_at
+
+    async def _handle_ask_user_timeout(self, state: AgentSessionState, question_id: str) -> None:
+        """Handle AskUserQuestion timeout by notifying the client."""
+        duration_seconds = self._get_pending_duration(state)
+        event = {
+            "type": "ask_user_timeout",
+            "question_id": question_id,
+            "questionId": question_id,
+            "error": "User response timed out",
+        }
+        await self._dispatch_event(state, event)
+        logger.info(
+            "ask_user_timeout",
+            extra={
+                "session_id": state.session_id,
+                "question_id": question_id,
+                "duration_seconds": duration_seconds,
+            },
+        )
+
+    async def _clear_pending_question(self, state: AgentSessionState, question_id: str) -> None:
+        """Clear pending question state if it matches the provided question ID."""
+        async with state.ws_lock:
+            if state.pending_question_id != question_id:
+                return
+            state.pending_question_id = None
+            state.pending_question = None
+            state.pending_answer_future = None
+            state.pending_question_started_at = None
+            state.waiting_for_user = False
 
     async def _terminate_state(self, state: AgentSessionState) -> None:
         """Terminate a session state instance regardless of registry status."""

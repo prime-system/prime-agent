@@ -85,6 +85,8 @@ def test_websocket_connected_session_id_and_complete():
             assert status_event["buffered_count"] == 0
             assert status_event["completed_at"] is None
             assert status_event["is_processing"] is False
+            assert status_event["waiting_for_user"] is False
+            assert status_event["pending_question_id"] is None
             assert "last_activity" in status_event
             assert "last_event_type" in status_event
 
@@ -131,6 +133,8 @@ def test_websocket_error_is_permanent():
             status_event = ws.receive_json()
             assert status_event["type"] == "session_status"
             assert "buffered_count" in status_event
+            assert "waiting_for_user" in status_event
+            assert "pending_question_id" in status_event
             ws.send_json({"type": "user_message", "data": {"message": "hello"}})
             error_event = ws.receive_json()
             assert error_event["type"] == "error"
@@ -183,6 +187,8 @@ def test_websocket_reconnect_replays_complete_event():
             status_event = ws.receive_json()
             assert status_event["type"] == "session_status"
             assert status_event["last_event_type"] == "complete"
+            assert status_event["waiting_for_user"] is False
+            assert status_event["pending_question_id"] is None
             replay_event = ws.receive_json()
             assert replay_event["type"] == "complete"
 
@@ -203,6 +209,8 @@ def test_websocket_resume_accepts_in_memory_session():
             completed_at=None,
             last_event_type=None,
             is_processing=False,
+            waiting_for_user=False,
+            pending_question_id=None,
         )
     )
     agent_session_manager.attach_websocket = AsyncMock(return_value=[])
@@ -217,3 +225,5 @@ def test_websocket_resume_accepts_in_memory_session():
             status_event = ws.receive_json()
             assert status_event["type"] == "session_status"
             assert status_event["buffered_count"] == 0
+            assert status_event["waiting_for_user"] is False
+            assert status_event["pending_question_id"] is None

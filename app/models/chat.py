@@ -68,12 +68,15 @@ class WSMessageType(str, Enum):
     # Client → Server
     USER_MESSAGE = "user_message"
     INTERRUPT = "interrupt"
+    ASK_USER_RESPONSE = "ask_user_response"
 
     # Server → Client
     CONNECTED = "connected"
     SESSION_ID = "session_id"
     SESSION_TAKEN = "session_taken"
     SESSION_STATUS = "session_status"
+    ASK_USER_QUESTION = "ask_user_question"
+    ASK_USER_TIMEOUT = "ask_user_timeout"
     TEXT = "text"
     TOOL_USE = "tool_use"
     THINKING = "thinking"
@@ -86,6 +89,19 @@ class WSInputMessage(BaseModel):
 
     type: WSMessageType = Field(..., description="Message type")
     data: dict[str, Any] = Field(default_factory=dict, description="Message payload")
+
+
+class AskUserResponseData(BaseModel):
+    """AskUserQuestion response payload from client."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    question_id: str = Field(..., alias="questionId", description="Question ID to answer")
+    answers: dict[str, str | list[str]] = Field(
+        default_factory=dict,
+        description="Question answers keyed by question text",
+    )
+    cancelled: bool = Field(default=False, description="Whether the user cancelled the prompt")
 
 
 class WSOutputMessage(BaseModel):
@@ -115,6 +131,19 @@ class WSOutputMessage(BaseModel):
     input: dict[str, Any] | None = Field(None, description="Tool input (for TOOL_USE)")
     content: str | None = Field(None, description="Thinking content (for THINKING)")
     status: str | None = Field(None, description="Status (for COMPLETE)")
+    question_id: str | None = Field(
+        None,
+        alias="questionId",
+        description="Question ID (for ASK_USER_QUESTION)",
+    )
+    questions: list[dict[str, Any]] | None = Field(
+        None,
+        description="AskUserQuestion prompts (for ASK_USER_QUESTION)",
+    )
+    timeout_seconds: int | None = Field(
+        None,
+        description="Timeout in seconds (for ASK_USER_QUESTION)",
+    )
     cost_usd: float | None = Field(
         None,
         alias="costUsd",
@@ -134,6 +163,15 @@ class WSOutputMessage(BaseModel):
     is_processing: bool | None = Field(
         None,
         description="Whether the session is currently processing (for SESSION_STATUS)",
+    )
+    waiting_for_user: bool | None = Field(
+        None,
+        description="Whether the session is awaiting AskUserQuestion response (for SESSION_STATUS)",
+    )
+    pending_question_id: str | None = Field(
+        None,
+        alias="pendingQuestionId",
+        description="Pending AskUserQuestion ID (for SESSION_STATUS)",
     )
     last_event_type: str | None = Field(
         None,

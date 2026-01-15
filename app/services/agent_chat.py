@@ -21,6 +21,14 @@ from claude_agent_sdk import (
     ThinkingBlock,
     ToolUseBlock,
 )
+from claude_agent_sdk.types import (
+    CanUseTool,
+    HookContext,
+    HookEvent,
+    HookInput,
+    HookJSONOutput,
+    HookMatcher,
+)
 
 from app.models.chat import SSEEventType
 from app.services.git import GitService
@@ -73,6 +81,9 @@ class AgentChatService:
         self,
         config: dict[str, Any] | None = None,
         resume: str | None = None,
+        *,
+        can_use_tool: CanUseTool | None = None,
+        hooks: dict[HookEvent, list[HookMatcher]] | None = None,
     ) -> ClaudeAgentOptions:
         """
         Create ClaudeAgentOptions from configuration.
@@ -96,11 +107,37 @@ class AgentChatService:
         if self.prime_api_token:
             env_dict["PRIME_API_TOKEN"] = self.prime_api_token
 
-        options = ClaudeAgentOptions(
-            allowed_tools=config.get(
+        allowed_tools = list(
+            config.get(
                 "allowed_tools",
-                ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "Skill", "WebSearch", "WebFetch"],
-            ),
+                [
+                    "Read",
+                    "Write",
+                    "Edit",
+                    "Glob",
+                    "Grep",
+                    "Bash",
+                    "Skill",
+                    "WebSearch",
+                    "WebFetch",
+                    "AskUserQuestion",
+                ],
+            )
+        )
+        if "AskUserQuestion" not in allowed_tools:
+            allowed_tools.append("AskUserQuestion")
+
+        resolved_hooks: dict[HookEvent, list[HookMatcher]] | None = None
+        if hooks is not None:
+            resolved_hooks = {key: value[:] for key, value in hooks.items()}
+        if can_use_tool is not None:
+            resolved_hooks = resolved_hooks or {}
+            resolved_hooks.setdefault("PreToolUse", []).append(
+                HookMatcher(matcher="AskUserQuestion", hooks=[self._noop_pre_tool_use])
+            )
+
+        options = ClaudeAgentOptions(
+            allowed_tools=allowed_tools,
             permission_mode=config.get("permission_mode", "acceptEdits"),
             system_prompt={
                 "type": "preset",
@@ -110,6 +147,8 @@ class AgentChatService:
             cwd=str(self.vault_path),
             env=env_dict,
             model=model,
+            can_use_tool=can_use_tool,
+            hooks=resolved_hooks,
         )
 
         if resume:
@@ -180,7 +219,22 @@ class AgentChatService:
             "durationMs": message.duration_ms,
         }
 
-    def create_client_instance(self, session_id: str | None = None) -> ClaudeSDKClient:
+    async def _noop_pre_tool_use(
+        self,
+        _input: HookInput,
+        _transcript_path: str | None,
+        _context: HookContext,
+    ) -> HookJSONOutput:
+        """No-op hook used to satisfy SDK requirements when can_use_tool is set."""
+        return {}
+
+    def create_client_instance(
+        self,
+        session_id: str | None = None,
+        *,
+        can_use_tool: CanUseTool | None = None,
+        hooks: dict[HookEvent, list[HookMatcher]] | None = None,
+    ) -> ClaudeSDKClient:
         """
         Create long-lived ClaudeSDKClient for session manager.
 
@@ -190,7 +244,9 @@ class AgentChatService:
         Returns:
             ClaudeSDKClient instance (not yet initialized)
         """
-        options = self._create_agent_options(resume=session_id)
+        options = self._create_agent_options(
+            resume=session_id, can_use_tool=can_use_tool, hooks=hooks
+        )
         return ClaudeSDKClient(options=options)
 
     async def process_message_stream(

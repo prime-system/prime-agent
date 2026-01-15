@@ -10,6 +10,7 @@ from fastapi.websockets import WebSocketDisconnect
 
 from app.dependencies import get_agent_session_manager, get_chat_session_manager
 from app.models.chat import (
+    AskUserResponseData,
     ChatHistoryResponse,
     ChatMessage,
     ChatSessionResponse,
@@ -228,6 +229,7 @@ async def websocket_endpoint(
         Client → Server:
             {"type": "user_message", "data": {"message": "text"}}
             {"type": "interrupt"}
+            {"type": "ask_user_response", "data": {"question_id": "q_123", "answers": {...}}}
 
         Server → Client:
             {"type": "connected", "connectionId": "conn_xxx", "sessionId": "uuid"}
@@ -235,6 +237,8 @@ async def websocket_endpoint(
             {"type": "text", "chunk": "..."}
             {"type": "tool_use", "name": "Read", "input": {...}}
             {"type": "thinking", "content": "..."}
+            {"type": "ask_user_question", "question_id": "q_123", "questions": [...], "timeout_seconds": 55}
+            {"type": "ask_user_timeout", "question_id": "q_123", "error": "..."}
             {"type": "complete", "status": "success", "costUsd": 0.01, "durationMs": 1200}
             {"type": "error", "error": "...", "isPermanent": true}
             {"type": "session_taken"}  # Sent when another client takes over
@@ -297,11 +301,15 @@ async def websocket_endpoint(
             completed_at = agent_session.completed_at
             last_event_type = agent_session.last_event_type
             is_processing = agent_session.is_processing
+            waiting_for_user = agent_session.waiting_for_user
+            pending_question_id = agent_session.pending_question_id
 
         session_status_payload: dict[str, Any] = {
             "type": WSMessageType.SESSION_STATUS.value,
             "session_id": agent_session.session_id,
             "is_processing": is_processing,
+            "waiting_for_user": waiting_for_user,
+            "pending_question_id": pending_question_id,
             "last_event_type": last_event_type,
             "buffered_count": len(buffered),
             "last_activity": last_activity.isoformat() if last_activity else None,
@@ -352,6 +360,38 @@ async def websocket_endpoint(
                             "error": "Interrupt not yet implemented",
                         }
                     )
+
+                elif msg.type == WSMessageType.ASK_USER_RESPONSE:
+                    try:
+                        response_data = AskUserResponseData(**msg.data)
+                    except Exception as e:
+                        await websocket.send_json(
+                            {
+                                "type": WSMessageType.ERROR.value,
+                                "error": f"Invalid ask_user_response: {e}",
+                            }
+                        )
+                        continue
+
+                    outcome, error_message = await agent_session_manager.submit_ask_user_response(
+                        agent_session.session_id,
+                        response_data.question_id,
+                        response_data.answers,
+                        cancelled=response_data.cancelled,
+                        ws_id=connection_id,
+                        connection_manager=connection_manager,
+                    )
+
+                    if outcome == "session_taken":
+                        break
+                    if outcome == "invalid":
+                        await websocket.send_json(
+                            {
+                                "type": WSMessageType.ERROR.value,
+                                "error": error_message or "Invalid ask_user_response",
+                            }
+                        )
+                    # ignored/accepted require no immediate response
 
             except Exception as e:
                 logger.error("Error handling message: %s", e)

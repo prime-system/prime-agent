@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 
+from claude_agent_sdk.types import PermissionResultAllow, PermissionResultDeny
+
 from app.services.agent_session_manager import AgentSessionManager
 from app.services.push_notifications import PushSendSummary
 
@@ -658,3 +660,141 @@ async def test_terminate_all_sessions(session_manager, mock_agent_service, mock_
 
     # All should be gone
     assert len(session_manager.sessions) == 0
+
+
+@pytest.mark.asyncio
+async def test_normalize_ask_user_answers(session_manager) -> None:
+    """Normalize multi-select and free text responses."""
+    normalized = session_manager._normalize_ask_user_answers(
+        {
+            "How should I format the output?": ["Summary", "Detailed"],
+            "Notes": "Free text",
+        },
+    )
+
+    assert normalized == {
+        "How should I format the output?": "Summary, Detailed",
+        "Notes": "Free text",
+    }
+
+
+@pytest.mark.asyncio
+async def test_ask_user_timeout_returns_deny(
+    session_manager, mock_agent_service, mock_client, monkeypatch
+) -> None:
+    """Timeouts should deny with interrupt."""
+    mock_agent_service.create_client_instance.return_value = mock_client
+    monkeypatch.setattr(session_manager, "ASK_USER_TIMEOUT_SECONDS", 0.01)
+
+    state = await session_manager.get_or_create_session("test-session")
+    session_manager.sessions["test-session"] = state
+
+    result = await session_manager._handle_ask_user_question(
+        state,
+        {"questions": [{"question": "Pick one"}]},
+    )
+
+    assert isinstance(result, PermissionResultDeny)
+    assert result.behavior == "deny"
+    assert result.interrupt is True
+
+
+@pytest.mark.asyncio
+async def test_ask_user_question_response_allows(
+    session_manager, mock_agent_service, mock_client, monkeypatch
+) -> None:
+    """AskUserQuestion should emit event and accept responses."""
+
+    class FakeConnectionManager:
+        def __init__(self) -> None:
+            self.sent = asyncio.Queue()
+
+        async def send_message(self, ws_id: str, message: dict[str, object]) -> bool:
+            await self.sent.put((ws_id, message))
+            return True
+
+        async def disconnect(self, ws_id: str) -> None:
+            return None
+
+    mock_agent_service.create_client_instance.return_value = mock_client
+    fake_connection_manager = FakeConnectionManager()
+    monkeypatch.setattr("app.api.chat.connection_manager", fake_connection_manager)
+
+    state = await session_manager.get_or_create_session("test-session")
+    session_manager.sessions["test-session"] = state
+
+    async with state.ws_lock:
+        state.connected_ws_id = "ws-1"
+
+    ask_task = asyncio.create_task(
+        session_manager._handle_ask_user_question(
+            state,
+            {"questions": [{"question": "How should I format the output?"}]},
+        )
+    )
+
+    ws_id, message = await asyncio.wait_for(fake_connection_manager.sent.get(), timeout=1)
+    assert ws_id == "ws-1"
+    assert message["type"] == "ask_user_question"
+
+    outcome, error = await session_manager.submit_ask_user_response(
+        "test-session",
+        message["question_id"],
+        {"How should I format the output?": "Summary"},
+        ws_id="ws-1",
+        connection_manager=fake_connection_manager,
+    )
+    assert outcome == "accepted"
+    assert error is None
+
+    result = await asyncio.wait_for(ask_task, timeout=1)
+    assert isinstance(result, PermissionResultAllow)
+    assert result.behavior == "allow"
+    assert result.updated_input is not None
+    assert result.updated_input["answers"]["How should I format the output?"] == "Summary"
+
+
+@pytest.mark.asyncio
+async def test_ask_user_question_buffered_until_reconnect(
+    session_manager, mock_agent_service, mock_client, mock_connection_manager
+) -> None:
+    """AskUserQuestion should buffer while disconnected and replay on attach."""
+    mock_agent_service.create_client_instance.return_value = mock_client
+
+    state = await session_manager.get_or_create_session("test-session")
+    session_manager.sessions["test-session"] = state
+
+    ask_task = asyncio.create_task(
+        session_manager._handle_ask_user_question(
+            state,
+            {"questions": [{"question": "Pick one"}]},
+        )
+    )
+    for _ in range(50):
+        async with state.ws_lock:
+            if state.pending_question_id:
+                break
+        await asyncio.sleep(0.01)
+    else:
+        pytest.fail("Pending question was not created in time")
+
+    buffered = await session_manager.attach_websocket(
+        "test-session",
+        "ws-1",
+        mock_connection_manager,
+    )
+    ask_event = next(event for event in buffered if event["type"] == "ask_user_question")
+
+    outcome, _ = await session_manager.submit_ask_user_response(
+        "test-session",
+        ask_event["question_id"],
+        {"Pick one": ["A", "B"]},
+        ws_id="ws-1",
+        connection_manager=mock_connection_manager,
+    )
+    assert outcome == "accepted"
+
+    result = await asyncio.wait_for(ask_task, timeout=1)
+    assert result.behavior == "allow"
+    assert result.updated_input is not None
+    assert result.updated_input["answers"]["Pick one"] == "A, B"
