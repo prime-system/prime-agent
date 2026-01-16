@@ -118,10 +118,18 @@ async def test_get_running_session_ids(session_manager, mock_agent_service, mock
     """Test reporting running session IDs."""
     mock_agent_service.create_client_instance.return_value = mock_client
 
-    await session_manager.get_or_create_session("running-session")
+    state = await session_manager.get_or_create_session("running-session")
     running_ids = await session_manager.get_running_session_ids()
 
-    assert "running-session" in running_ids
+    assert "running-session" not in running_ids
+
+    state.is_processing = True
+    running_ids_active = await session_manager.get_running_session_ids()
+    assert "running-session" in running_ids_active
+
+    state.waiting_for_user = True
+    running_ids_waiting = await session_manager.get_running_session_ids()
+    assert "running-session" not in running_ids_waiting
 
     await session_manager.terminate_session("running-session")
     running_ids_after = await session_manager.get_running_session_ids()

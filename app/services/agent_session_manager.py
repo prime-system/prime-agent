@@ -39,6 +39,8 @@ class AskUserResponsePayload(TypedDict):
 
 
 AskUserResponseOutcome = Literal["accepted", "invalid", "ignored", "session_taken"]
+SessionActivityStatus = Literal["thinking", "generating", "waiting", "done"]
+ACTIVE_SESSION_STATUSES: set[SessionActivityStatus] = {"thinking", "generating"}
 
 
 @dataclass
@@ -123,13 +125,47 @@ class AgentSessionManager:
         return session_id in self.sessions
 
     async def get_running_session_ids(self) -> set[str]:
-        """Return session IDs with active processing tasks."""
+        """Return session IDs actively generating a response."""
+        statuses = await self.get_session_activity_statuses()
+        return {
+            session_id
+            for session_id, status in statuses.items()
+            if status in ACTIVE_SESSION_STATUSES
+        }
+
+    async def get_session_activity_statuses(self) -> dict[str, SessionActivityStatus]:
+        """Return activity status for in-memory sessions."""
         async with self._lock:
-            return {
-                session_id
-                for session_id, state in self.sessions.items()
-                if not state.processing_task.done()
-            }
+            session_states = list(self.sessions.items())
+
+        statuses: dict[str, SessionActivityStatus] = {}
+        for session_id, state in session_states:
+            async with state.ws_lock:
+                statuses[session_id] = self._derive_activity_status(state)
+        return statuses
+
+    @staticmethod
+    def _derive_activity_status(state: AgentSessionState) -> SessionActivityStatus:
+        """Derive current activity status for a session."""
+        if state.waiting_for_user:
+            return "waiting"
+
+        if state.is_processing:
+            last_event_type = state.last_event_type
+            if last_event_type is None or last_event_type in {"thinking", "session_id"}:
+                return "thinking"
+            if last_event_type in {"complete", "error"}:
+                return "done"
+            return "generating"
+
+        if state.completed_at or state.last_event_type in {"complete", "error"}:
+            return "done"
+
+        return "waiting"
+
+    def get_activity_status(self, state: AgentSessionState) -> SessionActivityStatus:
+        """Return activity status for a session state instance."""
+        return self._derive_activity_status(state)
 
     async def get_or_create_session(self, session_id: str | None) -> AgentSessionState:
         """

@@ -130,7 +130,10 @@ class WSOutputMessage(BaseModel):
     name: str | None = Field(None, description="Tool name (for TOOL_USE)")
     input: dict[str, Any] | None = Field(None, description="Tool input (for TOOL_USE)")
     content: str | None = Field(None, description="Thinking content (for THINKING)")
-    status: str | None = Field(None, description="Status (for COMPLETE)")
+    status: str | None = Field(
+        None,
+        description="Status (for COMPLETE or SESSION_STATUS)",
+    )
     question_id: str | None = Field(
         None,
         alias="questionId",

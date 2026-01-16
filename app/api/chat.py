@@ -242,7 +242,7 @@ async def websocket_endpoint(
             {"type": "complete", "status": "success", "costUsd": 0.01, "durationMs": 1200}
             {"type": "error", "error": "...", "isPermanent": true}
             {"type": "session_taken"}  # Sent when another client takes over
-            {"type": "session_status", "session_id": "uuid", "is_processing": false, ...}
+            {"type": "session_status", "session_id": "uuid", "status": "waiting", ...}
 
     Args:
         websocket: WebSocket connection
@@ -303,6 +303,7 @@ async def websocket_endpoint(
             is_processing = agent_session.is_processing
             waiting_for_user = agent_session.waiting_for_user
             pending_question_id = agent_session.pending_question_id
+            activity_status = agent_session_manager.get_activity_status(agent_session)
 
         session_status_payload: dict[str, Any] = {
             "type": WSMessageType.SESSION_STATUS.value,
@@ -310,6 +311,7 @@ async def websocket_endpoint(
             "is_processing": is_processing,
             "waiting_for_user": waiting_for_user,
             "pending_question_id": pending_question_id,
+            "status": activity_status,
             "last_event_type": last_event_type,
             "buffered_count": len(buffered),
             "last_activity": last_activity.isoformat() if last_activity else None,

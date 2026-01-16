@@ -12,7 +12,11 @@ from app.dependencies import (
     get_chat_title_service,
     get_claude_session_api,
 )
-from app.services.agent_session_manager import AgentSessionManager
+from app.services.agent_session_manager import (
+    ACTIVE_SESSION_STATUSES,
+    AgentSessionManager,
+    SessionActivityStatus,
+)
 from app.services.chat_titles import ChatTitleService
 from app.services.claude_session_api import ClaudeSessionAPI
 from app.utils.claude_session_pagination import paginate_sessions
@@ -37,6 +41,7 @@ class SessionListItem(BaseModel):
     message_count: int
     file_path: str
     is_running: bool
+    status: SessionActivityStatus
 
 
 class SessionListResponse(BaseModel):
@@ -121,18 +126,22 @@ async def list_sessions(
             content={"error": "InvalidCursor", "message": str(exc)},
         )
 
-    running_ids = await agent_session_manager.get_running_session_ids()
+    activity_statuses = await agent_session_manager.get_session_activity_statuses()
     titles = await chat_title_service.get_titles([session["session_id"] for session in page])
     session_items: list[SessionListItem] = []
     for session in page:
         session_id = session.get("session_id")
         title = titles.get(session_id) if isinstance(session_id, str) else None
-        is_running = session_id in running_ids if isinstance(session_id, str) else False
+        status_value = (
+            activity_statuses.get(session_id, "done") if isinstance(session_id, str) else "done"
+        )
+        is_running = status_value in ACTIVE_SESSION_STATUSES
         session_items.append(
             SessionListItem(
                 **{
                     **session,
                     "title": title or session.get("summary") or None,
+                    "status": status_value,
                     "is_running": is_running,
                 }
             )

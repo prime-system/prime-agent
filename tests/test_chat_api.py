@@ -94,6 +94,7 @@ def test_websocket_connected_session_id_and_complete():
             assert status_event["is_processing"] is False
             assert status_event["waiting_for_user"] is False
             assert status_event["pending_question_id"] is None
+            assert status_event["status"] == "waiting"
             assert "last_activity" in status_event
             assert "last_event_type" in status_event
 
@@ -149,6 +150,7 @@ def test_websocket_error_is_permanent():
             assert "buffered_count" in status_event
             assert "waiting_for_user" in status_event
             assert "pending_question_id" in status_event
+            assert status_event["status"] == "waiting"
             ws.send_json({"type": "user_message", "data": {"message": "hello"}})
             error_event = ws.receive_json()
             assert error_event["type"] == "error"
@@ -207,6 +209,7 @@ def test_websocket_reconnect_replays_complete_event():
             assert connected["type"] == "connected"
             status_event = ws.receive_json()
             assert status_event["type"] == "session_status"
+            assert status_event["status"] == "done"
             assert status_event["last_event_type"] == "complete"
             assert status_event["waiting_for_user"] is False
             assert status_event["pending_question_id"] is None
@@ -234,6 +237,7 @@ def test_websocket_resume_accepts_in_memory_session():
             pending_question_id=None,
         )
     )
+    agent_session_manager.get_activity_status = MagicMock(return_value="waiting")
     agent_session_manager.attach_websocket = AsyncMock(return_value=[])
     agent_session_manager.finish_replay = AsyncMock()
     agent_session_manager.detach_websocket = AsyncMock()
@@ -248,3 +252,4 @@ def test_websocket_resume_accepts_in_memory_session():
             assert status_event["buffered_count"] == 0
             assert status_event["waiting_for_user"] is False
             assert status_event["pending_question_id"] is None
+            assert status_event["status"] == "waiting"

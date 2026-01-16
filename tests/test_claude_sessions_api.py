@@ -47,7 +47,7 @@ def sessions_dir(temp_claude_home: Path, temp_project_path: Path) -> Path:
 def agent_session_manager() -> MagicMock:
     """Create a mock AgentSessionManager."""
     manager = MagicMock()
-    manager.get_running_session_ids = AsyncMock(return_value=set())
+    manager.get_session_activity_statuses = AsyncMock(return_value={})
     return manager
 
 
@@ -135,6 +135,8 @@ def test_list_sessions_cursor_pagination(
     ]
     assert all("is_running" in session for session in payload["sessions"])
     assert all(session["is_running"] is False for session in payload["sessions"])
+    assert all("status" in session for session in payload["sessions"])
+    assert all(session["status"] == "done" for session in payload["sessions"])
     assert all(session["title"] == session["summary"] for session in payload["sessions"])
 
     response2 = client.get(
@@ -150,6 +152,8 @@ def test_list_sessions_cursor_pagination(
     assert [session["session_id"] for session in payload2["sessions"]] == ["session-0"]
     assert all("is_running" in session for session in payload2["sessions"])
     assert all(session["is_running"] is False for session in payload2["sessions"])
+    assert all("status" in session for session in payload2["sessions"])
+    assert all(session["status"] == "done" for session in payload2["sessions"])
     assert all(session["title"] == session["summary"] for session in payload2["sessions"])
 
 
@@ -196,6 +200,8 @@ def test_list_sessions_query_with_cursor(
     assert [session["session_id"] for session in payload["sessions"]] == ["alpha-1"]
     assert all("is_running" in session for session in payload["sessions"])
     assert all(session["is_running"] is False for session in payload["sessions"])
+    assert all("status" in session for session in payload["sessions"])
+    assert all(session["status"] == "done" for session in payload["sessions"])
     assert all(session["title"] == session["summary"] for session in payload["sessions"])
 
     response2 = client.get(
@@ -211,6 +217,8 @@ def test_list_sessions_query_with_cursor(
     assert [session["session_id"] for session in payload2["sessions"]] == ["alpha-0"]
     assert all("is_running" in session for session in payload2["sessions"])
     assert all(session["is_running"] is False for session in payload2["sessions"])
+    assert all("status" in session for session in payload2["sessions"])
+    assert all(session["status"] == "done" for session in payload2["sessions"])
     assert all(session["title"] == session["summary"] for session in payload2["sessions"])
 
 
@@ -232,7 +240,7 @@ def test_list_sessions_running_flag(
         "2025-12-28T12:00:00.000Z",
     )
 
-    agent_session_manager.get_running_session_ids.return_value = {"session-2"}
+    agent_session_manager.get_session_activity_statuses.return_value = {"session-2": "thinking"}
 
     response = client.get("/api/v1/claude-sessions")
     assert response.status_code == 200
@@ -243,6 +251,9 @@ def test_list_sessions_running_flag(
     }
     assert running_flags["session-2"] is True
     assert running_flags["session-1"] is False
+    status_flags = {session["session_id"]: session["status"] for session in payload["sessions"]}
+    assert status_flags["session-2"] == "thinking"
+    assert status_flags["session-1"] == "done"
 
 
 def test_list_sessions_uses_stored_title(
