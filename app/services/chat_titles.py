@@ -26,7 +26,7 @@ class ChatTitleEntry(BaseModel):
 
     title: str
     created_at: str
-    source: Literal["generated", "fallback"]
+    source: Literal["generated", "fallback", "command"]
 
 
 class ChatTitleStore(BaseModel):
@@ -139,7 +139,7 @@ class ChatTitleService:
         title: str,
         created_at: str,
         *,
-        source: Literal["generated", "fallback"],
+        source: Literal["generated", "fallback", "command"],
     ) -> None:
         """Persist a title for a session."""
         validated_id = validate_session_id(session_id)

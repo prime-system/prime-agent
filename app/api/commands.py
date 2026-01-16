@@ -6,11 +6,18 @@ import asyncio
 import functools
 import logging
 import re
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
-from app.dependencies import get_git_service, get_log_service, get_vault_service, verify_token
+from app.dependencies import (
+    get_chat_title_service,
+    get_git_service,
+    get_log_service,
+    get_vault_service,
+    verify_token,
+)
 from app.exceptions import VaultError
 from app.models.command import (
     CommandDetail,
@@ -25,6 +32,7 @@ from app.services.command_run_post import sync_command_run
 
 if TYPE_CHECKING:
     from app.services.agent import AgentService, ProcessResult
+    from app.services.chat_titles import ChatTitleService
     from app.services.command import CommandService
     from app.services.command_run_manager import CommandRunManager
     from app.services.git import GitService
@@ -34,6 +42,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/commands", dependencies=[Depends(verify_token)])
+
+
+def _format_command_title(command_name: str) -> str:
+    cleaned = command_name.replace("_", " ").replace("-", " ").replace(":", " ")
+    words = [word for word in cleaned.split() if word]
+    return " ".join(word.lower().capitalize() for word in words)
 
 
 def get_command_service() -> CommandService:
@@ -223,6 +237,7 @@ async def trigger_command(
     command_service: CommandService = Depends(get_command_service),
     agent_service: AgentService = Depends(get_agent_service),
     run_manager: CommandRunManager = Depends(get_command_run_manager),
+    chat_title_service: ChatTitleService = Depends(get_chat_title_service),
     git_service: GitService = Depends(get_git_service),
     log_service: LogService = Depends(get_log_service),
     vault_service: VaultService = Depends(get_vault_service),
@@ -272,6 +287,21 @@ async def trigger_command(
     # Define event handler to capture output
     async def event_handler(event_type: str, data: dict[str, Any]) -> None:
         await run_manager.append_event(run_id, event_type, data)
+        if event_type != "session_id":
+            return
+        session_id = data.get("session_id") or data.get("sessionId")
+        if not isinstance(session_id, str) or not session_id:
+            return
+        if await chat_title_service.title_exists(session_id):
+            return
+        title = _format_command_title(command_name)
+        created_at = datetime.now(UTC).isoformat()
+        await chat_title_service.set_title(
+            session_id,
+            title,
+            created_at,
+            source="command",
+        )
 
     # Create background task to execute command
     async def execute_command() -> None:

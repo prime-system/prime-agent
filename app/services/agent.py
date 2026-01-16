@@ -16,6 +16,7 @@ from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
     ResultMessage,
+    SystemMessage,
     TextBlock,
     ThinkingBlock,
     ToolUseBlock,
@@ -93,6 +94,24 @@ class AgentService:
                     await event_handler("tool_use", {"name": block.name, "input": block.input})
                 elif isinstance(block, ThinkingBlock):
                     await event_handler("thinking", {"content": block.thinking})
+        elif isinstance(message, SystemMessage) and message.subtype == "init":
+            session_id = message.data.get("session_id")
+            if session_id:
+                await event_handler(
+                    "session_id",
+                    {
+                        "session_id": session_id,
+                        "sessionId": session_id,
+                    },
+                )
+        elif isinstance(message, ResultMessage) and message.session_id:
+            await event_handler(
+                "session_id",
+                {
+                    "session_id": message.session_id,
+                    "sessionId": message.session_id,
+                },
+            )
 
     def _build_agent_options(
         self, *, max_budget_usd: float | None = None, model: str | None = None
