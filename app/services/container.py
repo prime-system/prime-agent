@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from app.services.schedule import ScheduleService
     from app.services.vault import VaultService
     from app.services.vault_browser import VaultBrowserService
+    from app.services.vault_search import VaultSearchService
 
 
 class ServiceContainer:
@@ -41,6 +42,7 @@ class ServiceContainer:
         self,
         vault_service: VaultService,
         vault_browser_service: VaultBrowserService,
+        vault_search_service: VaultSearchService,
         git_service: GitService,
         inbox_service: InboxService,
         agent_service: AgentService,
@@ -61,6 +63,7 @@ class ServiceContainer:
         """Initialize service container with all required services."""
         self.vault_service = vault_service
         self.vault_browser_service = vault_browser_service
+        self.vault_search_service = vault_search_service
         self.git_service = git_service
         self.inbox_service = inbox_service
         self.agent_service = agent_service
@@ -101,12 +104,14 @@ def init_container(
     agent_identity_service: AgentIdentityService,
     schedule_service: ScheduleService,
     vault_browser_service: VaultBrowserService | None = None,
+    vault_search_service: VaultSearchService | None = None,
 ) -> None:
     """Initialize service container (called once in FastAPI lifespan).
 
     Args:
         vault_service: VaultService instance for vault operations
         vault_browser_service: VaultBrowserService instance for browsing files
+        vault_search_service: VaultSearchService instance for vault search
         git_service: GitService instance for git operations
         inbox_service: InboxService instance for capture formatting
         agent_service: AgentService instance for agent operations
@@ -131,9 +136,15 @@ def init_container(
 
         vault_browser_service = VaultBrowserService(vault_service=vault_service)
 
+    if vault_search_service is None:
+        from app.services.vault_search import VaultSearchService
+
+        vault_search_service = VaultSearchService(vault_service=vault_service)
+
     _container = ServiceContainer(
         vault_service=vault_service,
         vault_browser_service=vault_browser_service,
+        vault_search_service=vault_search_service,
         git_service=git_service,
         inbox_service=inbox_service,
         agent_service=agent_service,

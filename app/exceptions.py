@@ -125,6 +125,14 @@ class ValidationError(PrimeAgentError):
     """
 
 
+class SearchError(PrimeAgentError):
+    """
+    Vault search failed.
+
+    Raised when ripgrep execution or output parsing fails.
+    """
+
+
 class InboxError(PrimeAgentError):
     """
     Inbox operation failed.

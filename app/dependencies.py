@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from app.services.schedule import ScheduleService
     from app.services.vault import VaultService
     from app.services.vault_browser import VaultBrowserService
+    from app.services.vault_search import VaultSearchService
 
 security = HTTPBearer(auto_error=False)
 
@@ -62,6 +63,12 @@ async def get_vault_browser_service() -> VaultBrowserService:
     """Get vault browser service via dependency injection."""
     container = get_container()
     return container.vault_browser_service
+
+
+async def get_vault_search_service() -> VaultSearchService:
+    """Get vault search service via dependency injection."""
+    container = get_container()
+    return container.vault_search_service
 
 
 async def get_git_service() -> GitService:

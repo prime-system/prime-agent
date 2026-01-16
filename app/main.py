@@ -20,6 +20,7 @@ from app.api import (
     push,
     schedule,
     vault_browser,
+    vault_search,
 )
 from app.config import settings
 from app.logging_config import configure_json_logging
@@ -45,6 +46,7 @@ from app.services.relay_client import PrimePushRelayClient
 from app.services.schedule import ScheduleService
 from app.services.vault import VaultService
 from app.services.vault_browser import VaultBrowserService
+from app.services.vault_search import VaultSearchService
 from app.version import get_version
 
 # Configure structured JSON logging
@@ -110,6 +112,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     agent_identity_service = AgentIdentityService(Path(settings.data_path))
     await agent_identity_service.get_or_create_identity()  # Load/create at startup
     vault_browser_service = VaultBrowserService(vault_service=vault_service)
+    vault_search_service = VaultSearchService(vault_service=vault_service)
 
     git_service = GitService(
         vault_path=settings.vault_path,
@@ -219,6 +222,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     init_container(
         vault_service=vault_service,
         vault_browser_service=vault_browser_service,
+        vault_search_service=vault_search_service,
         git_service=git_service,
         inbox_service=inbox_service,
         agent_service=agent_service,
@@ -313,3 +317,4 @@ app.include_router(monitoring.router, tags=["monitoring"])
 app.include_router(schedule.router, tags=["schedule"])
 app.include_router(push.router, tags=["push"])
 app.include_router(vault_browser.router, tags=["vault"])
+app.include_router(vault_search.router, tags=["vault"])
