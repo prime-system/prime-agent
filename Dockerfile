@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-client \
     curl \
     ca-certificates \
+    ripgrep \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv (Python package manager)
