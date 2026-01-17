@@ -46,7 +46,8 @@ class AgentService:
     def __init__(
         self,
         vault_path: str,
-        api_key: str,
+        api_key: str | None = None,
+        oauth_token: str | None = None,
         base_url: str | None = None,
         prime_api_url: str | None = None,
         prime_api_token: str | None = None,
@@ -58,15 +59,24 @@ class AgentService:
 
         Args:
             vault_path: Absolute path to vault directory
-            api_key: Anthropic API key
+            api_key: Anthropic API key (optional if oauth_token is set)
+            oauth_token: Anthropic OAuth token (optional if api_key is set)
             base_url: Optional custom API endpoint
             prime_api_url: Prime API base URL for notify skill
             prime_api_token: Prime API auth token for notify skill
             max_budget_usd: Maximum cost per command run (safety limit)
             timeout_seconds: Timeout for agent execution in seconds
         """
+        if not api_key and not oauth_token:
+            msg = "Either api_key or oauth_token must be provided"
+            raise ValueError(msg)
+        if api_key and oauth_token:
+            msg = "Only one of api_key or oauth_token can be provided"
+            raise ValueError(msg)
+
         self.vault_path = Path(vault_path)
         self.api_key = api_key
+        self.oauth_token = oauth_token
         self.base_url = base_url
         self.prime_api_url = prime_api_url
         self.prime_api_token = prime_api_token
@@ -118,7 +128,12 @@ class AgentService:
     ) -> ClaudeAgentOptions:
         """Build ClaudeAgentOptions with optional overrides."""
         # Build environment dict for API authentication
-        env_dict = {"ANTHROPIC_API_KEY": self.api_key}
+        env_dict: dict[str, str] = {}
+        if self.api_key:
+            env_dict["ANTHROPIC_API_KEY"] = self.api_key
+        elif self.oauth_token:
+            env_dict["CLAUDE_CODE_OAUTH_TOKEN"] = self.oauth_token
+
         if self.base_url:
             env_dict["ANTHROPIC_BASE_URL"] = self.base_url
         if self.prime_api_url:
@@ -156,7 +171,12 @@ class AgentService:
         self, *, max_budget_usd: float, model: str | None = None
     ) -> ClaudeAgentOptions:
         """Build ClaudeAgentOptions for chat title generation."""
-        env_dict = {"ANTHROPIC_API_KEY": self.api_key}
+        env_dict: dict[str, str] = {}
+        if self.api_key:
+            env_dict["ANTHROPIC_API_KEY"] = self.api_key
+        elif self.oauth_token:
+            env_dict["CLAUDE_CODE_OAUTH_TOKEN"] = self.oauth_token
+
         if self.base_url:
             env_dict["ANTHROPIC_BASE_URL"] = self.base_url
 
