@@ -6,9 +6,9 @@ import asyncio
 import functools
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 from zoneinfo import ZoneInfo
 
 from croniter import croniter
@@ -18,11 +18,13 @@ from app.models.schedule_config import ScheduleConfig, ScheduleJobConfig, load_s
 from app.services.background_tasks import safe_background_task
 from app.services.command_run_post import sync_command_run
 from app.services.lock import get_vault_lock
+from app.utils.command_titles import format_command_title
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.services.agent import AgentService, ProcessResult
+    from app.services.chat_titles import ChatTitleService
     from app.services.command import CommandService
     from app.services.git import GitService
     from app.services.logs import LogService
@@ -60,6 +62,7 @@ class ScheduleService:
         command_service: CommandService,
         *,
         tick_seconds: int = 30,
+        chat_title_service: ChatTitleService | None = None,
         git_service: GitService | None = None,
         log_service: LogService | None = None,
         vault_service: VaultService | None = None,
@@ -69,6 +72,7 @@ class ScheduleService:
         self._agent_service = agent_service
         self._command_service = command_service
         self._tick_seconds = tick_seconds
+        self._chat_title_service = chat_title_service
         self._git_service = git_service
         self._log_service = log_service
         self._vault_service = vault_service
@@ -417,12 +421,34 @@ class ScheduleService:
             await self._maybe_run_queued(state)
 
     async def _execute_command(self, state: ScheduleJobState) -> ProcessResult:
+        event_handler = None
+        chat_title_service = self._chat_title_service
+        if chat_title_service is not None:
+
+            async def event_handler(event_type: str, data: dict[str, Any]) -> None:
+                if event_type != "session_id":
+                    return
+                session_id = data.get("session_id") or data.get("sessionId")
+                if not isinstance(session_id, str) or not session_id:
+                    return
+                if await chat_title_service.title_exists(session_id):
+                    return
+                title = format_command_title(state.config.command)
+                created_at = datetime.now(UTC).isoformat()
+                await chat_title_service.set_title(
+                    session_id,
+                    title,
+                    created_at,
+                    source="command",
+                )
+
         return await self._agent_service.run_command(
             state.config.command,
             arguments=state.config.arguments,
             max_budget_usd=state.config.max_budget_usd,
             timeout_seconds=state.config.timeout_seconds,
             model=state.config.model,
+            event_handler=event_handler,
         )
 
     async def _maybe_run_queued(self, state: ScheduleJobState) -> None:

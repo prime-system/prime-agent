@@ -29,6 +29,7 @@ from app.models.command import (
 from app.services.background_tasks import safe_background_task
 from app.services.command_run_manager import RunStatus
 from app.services.command_run_post import sync_command_run
+from app.utils.command_titles import format_command_title
 
 if TYPE_CHECKING:
     from app.services.agent import AgentService, ProcessResult
@@ -45,12 +46,7 @@ router = APIRouter(prefix="/api/v1/commands", dependencies=[Depends(verify_token
 
 
 def _format_command_title(command_name: str) -> str:
-    cleaned = re.sub(r"[_:-]+", " ", command_name)
-    words: list[str] = []
-    for token in cleaned.split():
-        parts = re.findall(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|\d+", token)
-        words.extend(parts or [token])
-    return " ".join(word.lower().capitalize() for word in words)
+    return format_command_title(command_name)
 
 
 def get_command_service() -> CommandService:
@@ -297,7 +293,7 @@ async def trigger_command(
             return
         if await chat_title_service.title_exists(session_id):
             return
-        title = _format_command_title(command_name)
+        title = format_command_title(command_name)
         created_at = datetime.now(UTC).isoformat()
         await chat_title_service.set_title(
             session_id,

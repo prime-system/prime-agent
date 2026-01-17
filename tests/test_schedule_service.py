@@ -5,13 +5,14 @@ from __future__ import annotations
 import asyncio
 from contextlib import suppress
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import ANY, AsyncMock, MagicMock
 
 import pytest
 
 from app.models.command import CommandInfo, CommandListResponse, CommandType
 from app.models.schedule_config import ScheduleJobConfig
 from app.services.schedule import ScheduleJobState, ScheduleService
+from app.utils.command_titles import format_command_title
 
 
 @pytest.fixture
@@ -45,10 +46,15 @@ def schedule_service(temp_vault: Path) -> ScheduleService:
         mcp_commands=0,
     )
 
+    chat_title_service = MagicMock()
+    chat_title_service.title_exists = AsyncMock(return_value=False)
+    chat_title_service.set_title = AsyncMock()
+
     return ScheduleService(
         vault_path=str(temp_vault),
         agent_service=agent_service,
         command_service=command_service,
+        chat_title_service=chat_title_service,
     )
 
 
@@ -99,3 +105,43 @@ async def test_skip_mode_skips_when_running(schedule_service: ScheduleService) -
     state.running_task.cancel()
     with suppress(asyncio.CancelledError):
         await state.running_task
+
+
+@pytest.mark.asyncio
+async def test_scheduled_command_sets_chat_title(schedule_service: ScheduleService) -> None:
+    """Scheduled command runs persist a chat title when a session id is emitted."""
+    chat_title_service = schedule_service._chat_title_service
+    assert chat_title_service is not None
+    chat_title_service.title_exists = AsyncMock(return_value=False)
+    chat_title_service.set_title = AsyncMock()
+
+    async def run_command_side_effect(*args, **kwargs):
+        event_handler = kwargs.get("event_handler")
+        assert event_handler is not None
+        await event_handler("session_id", {"session_id": "session-1"})
+        return {
+            "success": True,
+            "cost_usd": 0.0,
+            "duration_ms": 10,
+            "error": None,
+        }
+
+    schedule_service._agent_service.run_command = AsyncMock(side_effect=run_command_side_effect)
+
+    job_config = ScheduleJobConfig(
+        id="daily-brief",
+        command="dailyBrief",
+        cron="*/5 * * * *",
+        overlap="skip",
+    )
+    state = ScheduleJobState(config=job_config)
+
+    await schedule_service._run_job(state)
+
+    expected_title = format_command_title(job_config.command)
+    chat_title_service.set_title.assert_awaited_once_with(
+        "session-1",
+        expected_title,
+        ANY,
+        source="command",
+    )

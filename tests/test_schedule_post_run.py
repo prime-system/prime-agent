@@ -44,6 +44,7 @@ async def test_schedule_triggers_post_run_helper(temp_vault, monkeypatch) -> Non
         vault_path=str(temp_vault),
         agent_service=agent_service,
         command_service=command_service,
+        chat_title_service=MagicMock(),
         git_service=MagicMock(),
         log_service=MagicMock(),
         vault_service=MagicMock(),
