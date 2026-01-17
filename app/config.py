@@ -170,7 +170,8 @@ class Settings(BaseSettings):
     cors_allowed_headers: list[str] = Field(default=["Authorization", "Content-Type"])
 
     # Agent configuration
-    anthropic_api_key: str  # Required for Claude Agent SDK
+    anthropic_api_key: str | None = None  # Optional if oauth_token is set
+    anthropic_oauth_token: str | None = None  # Optional if api_key is set
     anthropic_base_url: str | None = None  # Optional custom API endpoint
     agent_model: str  # Required agent model for chat
     agent_max_budget_usd: float = 2.0  # Safety limit per command run
@@ -241,6 +242,30 @@ class Settings(BaseSettings):
                     msg = f"CORS origin must be HTTPS in production: {origin}"
                     raise ValueError(msg)
 
+    def validate_anthropic_auth(self) -> None:
+        """Validate Anthropic authentication configuration.
+
+        Ensures:
+        - Exactly one of api_key or oauth_token is set (mutually exclusive)
+        """
+        has_api_key = bool(self.anthropic_api_key)
+        has_oauth_token = bool(self.anthropic_oauth_token)
+
+        if not has_api_key and not has_oauth_token:
+            msg = (
+                "Either ANTHROPIC_API_KEY or ANTHROPIC_OAUTH_TOKEN must be set.\n"
+                "Please set one in your .env file or config.yaml."
+            )
+            raise ValueError(msg)
+
+        if has_api_key and has_oauth_token:
+            msg = (
+                "Both ANTHROPIC_API_KEY and ANTHROPIC_OAUTH_TOKEN are set.\n"
+                "Only one authentication method can be used at a time.\n"
+                "Please set only one in your .env file or config.yaml."
+            )
+            raise ValueError(msg)
+
     @property
     def apn_dir(self) -> Path:
         """Directory for device registry storage."""
@@ -286,6 +311,7 @@ def _build_settings_from_yaml() -> Settings:
 
     if "anthropic" in config_dict and isinstance(config_dict["anthropic"], dict):
         flat_config["anthropic_api_key"] = config_dict["anthropic"].get("api_key")
+        flat_config["anthropic_oauth_token"] = config_dict["anthropic"].get("oauth_token")
         flat_config["anthropic_base_url"] = config_dict["anthropic"].get("base_url")
         flat_config["agent_model"] = config_dict["anthropic"].get("model")
         flat_config["agent_max_budget_usd"] = config_dict["anthropic"].get("max_budget_usd", 2.0)
@@ -336,6 +362,8 @@ def _build_settings_from_yaml() -> Settings:
         settings_obj = Settings(**flat_config)
         # Validate CORS configuration
         settings_obj.validate_cors_config()
+        # Validate Anthropic authentication
+        settings_obj.validate_anthropic_auth()
         return settings_obj
     except ValidationError as e:
         print(f"Configuration validation error: {e}")

@@ -4,7 +4,7 @@
 # Environment variables are referenced with ${VAR_NAME} syntax and are expanded at startup.
 #
 # Required environment variables (must be set before startup):
-# - ANTHROPIC_API_KEY: Your Claude API key
+# - ANTHROPIC_API_KEY or ANTHROPIC_OAUTH_TOKEN: Your Claude API key or OAuth token (mutually exclusive)
 # - AUTH_TOKEN: API authentication token
 #
 # Optional environment variables:
@@ -50,9 +50,15 @@ git:
     method: ssh
 
 anthropic:
-  # Claude API key (required)
+  # Claude API key (optional if oauth_token is set)
   # Provide via ANTHROPIC_API_KEY environment variable
+  # Note: Only one of api_key or oauth_token can be set
   api_key: ${ANTHROPIC_API_KEY}
+
+  # Claude OAuth token (optional if api_key is set)
+  # Provide via ANTHROPIC_OAUTH_TOKEN environment variable
+  # Note: Only one of api_key or oauth_token can be set
+  oauth_token: ${ANTHROPIC_OAUTH_TOKEN}
 
   # Optional: Custom Anthropic API endpoint
   # Leave null to use default endpoint

@@ -19,13 +19,21 @@ Before running the server, you need to configure environment variables:
 
 2. **Edit `.env` with your credentials:**
    ```bash
-   # Required variables (minimum to run)
+   # Required: Authentication for Claude API (choose one)
+   # Option 1: API Key (traditional)
    ANTHROPIC_API_KEY=sk-ant-your-actual-api-key-here
+
+   # Option 2: OAuth Token (alternative to API key)
+   # ANTHROPIC_OAUTH_TOKEN=your-oauth-token-here
+
+   # Required: API authentication token
    AUTH_TOKEN=your-secure-random-token-here
 
    # Generate a secure token with:
    openssl rand -base64 32
    ```
+
+   **Note:** Only one of `ANTHROPIC_API_KEY` or `ANTHROPIC_OAUTH_TOKEN` should be set, not both.
 
 3. **Optional: Configure Git or APNs** (if needed)
    - For Git sync: Set `GIT_SSH_KEY` or `GIT_USERNAME`/`GIT_TOKEN`
@@ -72,7 +80,7 @@ The `docker-compose.yml` provides a complete development environment:
 - `./config.default.yaml:/app/config.yaml:ro` - Configuration (read-only mount)
 
 **Required Environment Variables:**
-- `ANTHROPIC_API_KEY` - Claude API key (required)
+- `ANTHROPIC_API_KEY` or `ANTHROPIC_OAUTH_TOKEN` - Claude authentication (choose one, not both)
 - `AUTH_TOKEN` - API authentication token (required)
 
 **Optional Environment Variables:**
@@ -84,9 +92,17 @@ The `docker-compose.yml` provides a complete development environment:
 
 Note: CORS configuration is **automatic** via `base_url` setting in config.yaml. No additional environment variables needed!
 
-**Example .env file:**
+**Example .env file (API Key):**
 ```bash
 ANTHROPIC_API_KEY=sk-ant-...
+AUTH_TOKEN=your-secure-token
+# Optional git configuration
+GIT_SSH_KEY=-----BEGIN OPENSSH PRIVATE KEY-----...
+```
+
+**Example .env file (OAuth Token):**
+```bash
+ANTHROPIC_OAUTH_TOKEN=your-oauth-token-here
 AUTH_TOKEN=your-secure-token
 # Optional git configuration
 GIT_SSH_KEY=-----BEGIN OPENSSH PRIVATE KEY-----...
@@ -292,7 +308,7 @@ The application uses a **dependency injection pattern** where services are initi
    - Location: `/app/config.yaml` (or `CONFIG_PATH` env var)
    - Supports `${ENV_VAR}` expansion (app/config.py:10-31)
    - Dynamically reloaded on file changes via `ConfigManager` (app/config.py:251-287)
-   - Required: `ANTHROPIC_API_KEY`, `AUTH_TOKEN`
+   - Required: `ANTHROPIC_API_KEY` or `ANTHROPIC_OAUTH_TOKEN` (choose one), `AUTH_TOKEN`
 
 2. **Vault Config** (`.prime/settings.yaml` in vault root) - Capture organization
    - Controls inbox folder name, file patterns, weekly subfolders
@@ -520,10 +536,16 @@ Config files use `${VAR_NAME}` syntax, expanded at startup:
 ```yaml
 # config.yaml
 anthropic:
+  # Option 1: API Key
   api_key: ${ANTHROPIC_API_KEY}  # Expands to env var value
+
+  # Option 2: OAuth Token (alternative to API key)
+  oauth_token: ${ANTHROPIC_OAUTH_TOKEN}  # Expands to env var value
 ```
 
 Expansion logic in `app/config.py:10-31`. Missing variables raise clear errors.
+
+**Note:** Only one of `api_key` or `oauth_token` should be set. The application validates this at startup and will fail if both are set or if neither is set.
 
 ### YAML Frontmatter in Captures
 
@@ -953,7 +975,7 @@ class MyService:
 **Critical: Never log credentials in any form.** Exposed credentials in Docker logs, CI/CD pipelines, and log aggregation systems pose significant security risks (CWE-532, PCI-DSS violation).
 
 **What NEVER to log:**
-- API keys or tokens (e.g., `ANTHROPIC_API_KEY`, `AUTH_TOKEN`)
+- API keys or tokens (e.g., `ANTHROPIC_API_KEY`, `ANTHROPIC_OAUTH_TOKEN`, `AUTH_TOKEN`)
 - Credential identifiers (team IDs, key IDs) - even metadata can reveal infrastructure
 - Partial credentials (first 50 chars of keys)
 - Credential lengths (hints at key size)
@@ -1244,7 +1266,7 @@ cp .env.example .env
 docker compose logs primeai
 
 # Most common issues:
-# 1. Missing ANTHROPIC_API_KEY or AUTH_TOKEN in .env
+# 1. Missing ANTHROPIC_API_KEY/ANTHROPIC_OAUTH_TOKEN or AUTH_TOKEN in .env
 # 2. Invalid YAML in config.default.yaml
 # 3. Missing Python dependencies (run make dev-build)
 ```

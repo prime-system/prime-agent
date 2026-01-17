@@ -131,6 +131,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     agent_service = AgentService(
         vault_path=settings.vault_path,
         api_key=settings.anthropic_api_key,
+        oauth_token=settings.anthropic_oauth_token,
         base_url=settings.anthropic_base_url,
         prime_api_url=prime_api_url,
         prime_api_token=settings.auth_token,
@@ -153,8 +154,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Initialize agent chat service
     agent_chat_service = AgentChatService(
         vault_path=settings.vault_path,
-        api_key=settings.anthropic_api_key,
         model=settings.agent_model,
+        api_key=settings.anthropic_api_key,
+        oauth_token=settings.anthropic_oauth_token,
         base_url=settings.anthropic_base_url,
         prime_api_url=prime_api_url,
         prime_api_token=settings.auth_token,
