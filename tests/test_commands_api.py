@@ -132,6 +132,20 @@ Second command content
     assert cmd1["namespace"] is None
 
 
+def test_format_command_title_handles_camel_case() -> None:
+    """Ensure command titles are humanized from multiple naming styles."""
+    cases = {
+        "process_capture": "Process Capture",
+        "process-capture": "Process Capture",
+        "processCapture": "Process Capture",
+        "dailyBrief": "Daily Brief",
+        "admin:processCapture": "Admin Process Capture",
+    }
+
+    for command_name, expected in cases.items():
+        assert commands._format_command_title(command_name) == expected
+
+
 def test_list_commands_with_namespaces(client_with_commands: TestClient, temp_vault: Path) -> None:
     """Test listing commands with subdirectory namespaces."""
     commands_dir = temp_vault / ".claude" / "commands"

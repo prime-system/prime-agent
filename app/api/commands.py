@@ -45,8 +45,11 @@ router = APIRouter(prefix="/api/v1/commands", dependencies=[Depends(verify_token
 
 
 def _format_command_title(command_name: str) -> str:
-    cleaned = command_name.replace("_", " ").replace("-", " ").replace(":", " ")
-    words = [word for word in cleaned.split() if word]
+    cleaned = re.sub(r"[_:-]+", " ", command_name)
+    words: list[str] = []
+    for token in cleaned.split():
+        parts = re.findall(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|\d+", token)
+        words.extend(parts or [token])
     return " ".join(word.lower().capitalize() for word in words)
 
 
