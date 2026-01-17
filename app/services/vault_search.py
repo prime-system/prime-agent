@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import re
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -210,8 +212,28 @@ class VaultSearchService:
                 },
             )
 
-        truncated = len(results) > request.max_results
+        content_truncated = len(results) > request.max_results
         results = results[: request.max_results]
+
+        filename_matches, filename_truncated = await asyncio.to_thread(
+            self._search_filenames,
+            request,
+            search_root=search_root,
+            show_hidden=show_hidden,
+            max_results=request.max_results,
+        )
+        filename_matches = filename_matches[: request.max_results]
+
+        combined_results = list(filename_matches)
+        remaining_slots = request.max_results - len(combined_results)
+        if remaining_slots > 0:
+            combined_results.extend(results[:remaining_slots])
+
+        truncated = (
+            content_truncated
+            or filename_truncated
+            or (len(filename_matches) + len(results)) > request.max_results
+        )
 
         logger.info(
             "Vault search completed",
@@ -224,7 +246,8 @@ class VaultSearchService:
                 "show_hidden": show_hidden,
                 "max_results": request.max_results,
                 "context_lines": request.context_lines,
-                "result_count": len(results),
+                "result_count": len(combined_results),
+                "filename_match_count": len(filename_matches),
                 "truncated": truncated,
                 "duration_ms": duration_ms,
             },
@@ -232,8 +255,8 @@ class VaultSearchService:
 
         return SearchResponse(
             query=request.query,
-            results=results,
-            total_matches=len(results),
+            results=combined_results,
+            total_matches=len(combined_results),
             truncated=truncated,
             duration_ms=duration_ms,
         )
@@ -299,6 +322,133 @@ class VaultSearchService:
             )
 
         return resolved
+
+    def _search_filenames(
+        self,
+        request: SearchRequest,
+        search_root: Path,
+        show_hidden: bool,
+        max_results: int,
+    ) -> tuple[list[SearchMatch], bool]:
+        results: list[SearchMatch] = []
+        regex: re.Pattern[str] | None = None
+        case_sensitive = self._is_smart_case_sensitive(request)
+
+        if request.regex:
+            flags = 0 if case_sensitive else re.IGNORECASE
+            try:
+                regex = re.compile(request.query, flags=flags)
+            except re.error:
+                return results, False
+
+        vault_root = self.vault_service.vault_path.resolve()
+
+        for file_path in self._iter_search_files(search_root, show_hidden):
+            if self._globs_exclude(file_path, request.globs, search_root, vault_root):
+                continue
+
+            name = file_path.name
+            stem = file_path.stem
+            if not self._matches_filename(request, name, stem, regex, case_sensitive):
+                continue
+
+            relative_path = self._normalized_relative_path(file_path, vault_root)
+            results.append(
+                SearchMatch(
+                    path=relative_path,
+                    line=1,
+                    column=1,
+                    text=name,
+                    context_before=[],
+                    context_after=[],
+                )
+            )
+
+            if len(results) > max_results:
+                return results, True
+
+        return results, False
+
+    def _matches_filename(
+        self,
+        request: SearchRequest,
+        name: str,
+        stem: str,
+        regex: re.Pattern[str] | None,
+        case_sensitive: bool,
+    ) -> bool:
+        if request.regex:
+            if regex is None:
+                return False
+            return regex.search(name) is not None or regex.search(stem) is not None
+
+        if case_sensitive:
+            return request.query in name or request.query in stem
+
+        query = request.query.lower()
+        return query in name.lower() or query in stem.lower()
+
+    def _iter_search_files(self, search_root: Path, show_hidden: bool) -> Iterable[Path]:
+        excluded_dirs = set(EXCLUDED_GLOBS)
+        for root, dirnames, filenames in os.walk(search_root, followlinks=FOLLOW_SYMLINKS):
+            dirnames[:] = [
+                name
+                for name in dirnames
+                if name not in excluded_dirs and (show_hidden or not name.startswith("."))
+            ]
+            for filename in filenames:
+                if not show_hidden and filename.startswith("."):
+                    continue
+                yield Path(root) / filename
+
+    def _globs_exclude(
+        self,
+        file_path: Path,
+        globs: list[str] | None,
+        search_root: Path,
+        vault_root: Path,
+    ) -> bool:
+        if not globs:
+            return False
+        relative_to_search = file_path.relative_to(search_root).as_posix()
+        relative_to_root = file_path.relative_to(vault_root).as_posix()
+
+        include_patterns: list[str] = []
+        exclude_patterns: list[str] = []
+        for pattern in globs:
+            if pattern.startswith("!"):
+                cleaned = pattern[1:]
+                if cleaned:
+                    exclude_patterns.append(cleaned)
+                continue
+            include_patterns.append(pattern)
+
+        def matches_pattern(pattern: str) -> bool:
+            return (
+                Path(relative_to_search).match(pattern)
+                or Path(relative_to_root).match(pattern)
+                or Path(file_path.name).match(pattern)
+            )
+
+        if any(matches_pattern(pattern) for pattern in exclude_patterns):
+            return True
+
+        if not include_patterns:
+            return False
+
+        return all(not matches_pattern(pattern) for pattern in include_patterns)
+
+    def _normalized_relative_path(self, path: Path, vault_root: Path) -> str:
+        try:
+            relative_path = path.resolve().relative_to(vault_root)
+        except ValueError:
+            return path.as_posix()
+        return relative_path.as_posix()
+
+    def _is_smart_case_sensitive(self, request: SearchRequest) -> bool:
+        if request.case_sensitive:
+            return True
+        return any(char.isupper() for char in request.query)
 
     def _relative_search_path(self, search_root: Path) -> str:
         vault_root = self.vault_service.vault_path.resolve()

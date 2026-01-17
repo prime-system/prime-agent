@@ -80,7 +80,9 @@ logging:
             )
 
             os.environ["CONFIG_PATH"] = str(config_path)
-            with pytest.raises(ValueError, match="Both ANTHROPIC_API_KEY and ANTHROPIC_OAUTH_TOKEN"):
+            with pytest.raises(
+                ValueError, match="Both ANTHROPIC_API_KEY and ANTHROPIC_OAUTH_TOKEN"
+            ):
                 _build_settings_from_yaml()
 
     def test_build_settings_with_neither_api_key_nor_oauth_token_raises_error(self) -> None:
@@ -111,7 +113,9 @@ logging:
             )
 
             os.environ["CONFIG_PATH"] = str(config_path)
-            with pytest.raises(ValueError, match="Either ANTHROPIC_API_KEY or ANTHROPIC_OAUTH_TOKEN"):
+            with pytest.raises(
+                ValueError, match="Either ANTHROPIC_API_KEY or ANTHROPIC_OAUTH_TOKEN"
+            ):
                 _build_settings_from_yaml()
 
     def test_build_settings_with_oauth_token_and_base_url(self) -> None:

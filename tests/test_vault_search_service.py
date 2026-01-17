@@ -130,6 +130,106 @@ async def test_search_respects_show_hidden(temp_vault: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_search_matches_filename_when_content_missing(temp_vault: Path) -> None:
+    """Search should match file names even when content does not match."""
+    if shutil.which("rg") is None:
+        pytest.skip("ripgrep not available")
+
+    vault_service = VaultService(str(temp_vault))
+    vault_service.ensure_structure()
+    logs_dir = temp_vault / "08-Logs"
+    logs_dir.mkdir()
+    target_name = "command-positiveMessage-2026-01-13T16-45-51Z.md"
+    (logs_dir / target_name).write_text("unrelated content")
+
+    search_service = VaultSearchService(vault_service=vault_service)
+    request = SearchRequest(query="command-positiveMessage-2026-01-13T16-45-51Z")
+    response = await search_service.search(request)
+
+    assert any(match.path == f"08-Logs/{target_name}" for match in response.results)
+
+
+@pytest.mark.asyncio
+async def test_search_filename_priority_over_content(temp_vault: Path) -> None:
+    """Filename matches should appear before content matches."""
+    if shutil.which("rg") is None:
+        pytest.skip("ripgrep not available")
+
+    vault_service = VaultService(str(temp_vault))
+    vault_service.ensure_structure()
+    notes_dir = temp_vault / "Notes"
+    notes_dir.mkdir()
+    (notes_dir / "report.md").write_text("unrelated content")
+    (notes_dir / "meeting.md").write_text("report")
+
+    search_service = VaultSearchService(vault_service=vault_service)
+    request = SearchRequest(query="report", max_results=1)
+    response = await search_service.search(request)
+
+    assert response.results[0].path == "Notes/report.md"
+
+
+@pytest.mark.asyncio
+async def test_search_preserves_multiple_matches_in_same_file(temp_vault: Path) -> None:
+    """Search should return multiple content matches from the same file."""
+    if shutil.which("rg") is None:
+        pytest.skip("ripgrep not available")
+
+    vault_service = VaultService(str(temp_vault))
+    vault_service.ensure_structure()
+    notes_dir = temp_vault / "Notes"
+    notes_dir.mkdir()
+    target_name = "match-report.md"
+    (notes_dir / target_name).write_text("match\nmatch\n")
+
+    search_service = VaultSearchService(vault_service=vault_service)
+    request = SearchRequest(query="match", max_results=10)
+    response = await search_service.search(request)
+
+    matches = [match for match in response.results if match.path == f"Notes/{target_name}"]
+    lines = {match.line for match in matches}
+    assert {1, 2}.issubset(lines)
+
+
+@pytest.mark.asyncio
+async def test_search_filename_respects_smart_case(temp_vault: Path) -> None:
+    """Filename search should follow smart-case when case_sensitive is false."""
+    if shutil.which("rg") is None:
+        pytest.skip("ripgrep not available")
+
+    vault_service = VaultService(str(temp_vault))
+    vault_service.ensure_structure()
+    notes_dir = temp_vault / "Notes"
+    notes_dir.mkdir()
+    (notes_dir / "report.md").write_text("unrelated")
+
+    search_service = VaultSearchService(vault_service=vault_service)
+    request = SearchRequest(query="Report", case_sensitive=False)
+    response = await search_service.search(request)
+
+    assert response.total_matches == 0
+
+
+@pytest.mark.asyncio
+async def test_search_filename_respects_negative_globs(temp_vault: Path) -> None:
+    """Filename search should honor exclude globs."""
+    if shutil.which("rg") is None:
+        pytest.skip("ripgrep not available")
+
+    vault_service = VaultService(str(temp_vault))
+    vault_service.ensure_structure()
+    notes_dir = temp_vault / "Notes"
+    notes_dir.mkdir()
+    (notes_dir / "alpha.md").write_text("alpha")
+
+    search_service = VaultSearchService(vault_service=vault_service)
+    request = SearchRequest(query="alpha", globs=["!Notes/**"])
+    response = await search_service.search(request)
+
+    assert response.total_matches == 0
+
+
+@pytest.mark.asyncio
 async def test_search_invalid_regex_raises(temp_vault: Path) -> None:
     """Invalid regex should raise ValidationError."""
     if shutil.which("rg") is None:
